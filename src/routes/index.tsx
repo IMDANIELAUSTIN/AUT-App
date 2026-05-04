@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Carousel,
   CarouselApi,
@@ -30,6 +30,7 @@ import {
   YAxis,
 } from "recharts";
 import jsPDF from "jspdf";
+import { Settings as SettingsIcon } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   component: Index,
@@ -52,24 +53,24 @@ export const Route = createFileRoute("/")({
 });
 
 // ---------- Currency / conversion ----------
-type FiatCode = "USD" | "EUR" | "GBP" | "JPY" | "CAD";
-type CryptoCode = "BTC" | "ETH" | "SOL" | "USDC";
+type FiatCode = "NONE" | "USD" | "EUR" | "GBP" | "JPY" | "CAD";
+type CryptoCode = "NONE" | "BTC" | "ETH" | "SOL" | "USDC";
 
-// Static mock rates relative to 1 USD. (Replace with live API later.)
-const FIAT_PER_USD: Record<FiatCode, number> = {
+const FIAT_PER_USD: Record<Exclude<FiatCode, "NONE">, number> = {
   USD: 1,
   EUR: 0.92,
   GBP: 0.78,
   JPY: 156.4,
   CAD: 1.37,
 };
-const USD_PER_CRYPTO: Record<CryptoCode, number> = {
+const USD_PER_CRYPTO: Record<Exclude<CryptoCode, "NONE">, number> = {
   BTC: 67000,
   ETH: 3400,
   SOL: 165,
   USDC: 1,
 };
 const FIAT_SYMBOL: Record<FiatCode, string> = {
+  NONE: "",
   USD: "$",
   EUR: "€",
   GBP: "£",
@@ -77,67 +78,116 @@ const FIAT_SYMBOL: Record<FiatCode, string> = {
   CAD: "C$",
 };
 
-const fmtFiat = (n: number, code: FiatCode) =>
-  n.toLocaleString("en-US", {
+const fmtFiat = (n: number, code: FiatCode) => {
+  if (code === "NONE") {
+    return n.toLocaleString("en-US", { maximumFractionDigits: 0 });
+  }
+  return n.toLocaleString("en-US", {
     style: "currency",
     currency: code,
-    maximumFractionDigits: code === "JPY" ? 0 : 0,
+    maximumFractionDigits: 0,
   });
+};
 
 // ---------- Pay frequency ----------
 type PayFreq = "hourly" | "daily" | "weekly" | "biweekly" | "monthly";
 type TimeUnit = "day" | "week" | "month";
 
-// Hours per period defaults
-const HOURS_PER_UNIT: Record<TimeUnit, number> = {
-  day: 8,
-  week: 40,
-  month: 160,
-};
-// Multiply hours-in-unit to get monthly
+const HOURS_PER_UNIT: Record<TimeUnit, number> = { day: 8, week: 40, month: 160 };
 const UNIT_TO_MONTH: Record<TimeUnit, number> = {
-  day: 30 / 7 * 5, // ~21.4 working days → use 4.33*5
+  day: (30 / 7) * 5,
   week: 4.33,
   month: 1,
 };
 
-// Convert wage to hourly given pay frequency and the period amount
 function toHourly(amount: number, freq: PayFreq, hoursPerWeek: number): number {
   if (amount <= 0) return 0;
   switch (freq) {
-    case "hourly":
-      return amount;
-    case "daily":
-      return amount / (hoursPerWeek / 5);
-    case "weekly":
-      return amount / hoursPerWeek;
-    case "biweekly":
-      return amount / (hoursPerWeek * 2);
-    case "monthly":
-      return amount / (hoursPerWeek * 4.33);
+    case "hourly": return amount;
+    case "daily": return amount / (hoursPerWeek / 5);
+    case "weekly": return amount / hoursPerWeek;
+    case "biweekly": return amount / (hoursPerWeek * 2);
+    case "monthly": return amount / (hoursPerWeek * 4.33);
+  }
+}
+
+// ---------- Tax ----------
+type TaxConfig = {
+  federal: number; // %
+  state: number;
+  fica: number;
+  other: number;
+};
+const DEFAULT_TAX: TaxConfig = { federal: 12, state: 5, fica: 7.65, other: 0 };
+
+// ---------- Persistence ----------
+const STORAGE_KEY = "austin-equation:v2";
+
+function loadState<T>(key: string, fallback: T): T {
+  if (typeof window === "undefined") return fallback;
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? { ...fallback, ...JSON.parse(raw) } : fallback;
+  } catch {
+    return fallback;
   }
 }
 
 // ---------- Component ----------
 function Index() {
-  // Inputs
-  const [fiat, setFiat] = useState<FiatCode>("USD");
-  const [crypto, setCrypto] = useState<CryptoCode>("BTC");
+  const initial = loadState(STORAGE_KEY, {
+    fiat: "USD" as FiatCode,
+    crypto: "BTC" as CryptoCode,
+    expenses: 3200,
+    wageAmount: 1120,
+    payFreq: "weekly" as PayFreq,
+    timeUnit: "week" as TimeUnit,
+    hoursPerUnit: 40,
+    effort: 1,
+    taxEnabled: false,
+    tax: DEFAULT_TAX,
+    slide: 0,
+    surplusAsHours: false,
+  });
 
-  const [expenses, setExpenses] = useState(3200); // in selected fiat / month
-  const [wageAmount, setWageAmount] = useState(1120);
-  const [payFreq, setPayFreq] = useState<PayFreq>("weekly");
-  const [timeUnit, setTimeUnit] = useState<TimeUnit>("week");
-  const [hoursPerUnit, setHoursPerUnit] = useState(40);
-  const [effort, setEffort] = useState(1);
+  const [fiat, setFiat] = useState<FiatCode>(initial.fiat);
+  const [crypto, setCrypto] = useState<CryptoCode>(initial.crypto);
+  const [expenses, setExpenses] = useState<number>(initial.expenses);
+  const [wageAmount, setWageAmount] = useState<number>(initial.wageAmount);
+  const [payFreq, setPayFreq] = useState<PayFreq>(initial.payFreq);
+  const [timeUnit, setTimeUnit] = useState<TimeUnit>(initial.timeUnit);
+  const [hoursPerUnit, setHoursPerUnit] = useState<number>(initial.hoursPerUnit);
+  const [effort, setEffort] = useState<number>(initial.effort);
+  const [taxEnabled, setTaxEnabled] = useState<boolean>(initial.taxEnabled);
+  const [tax, setTax] = useState<TaxConfig>(initial.tax);
+  const [initialSlide] = useState<number>(initial.slide);
+  const [currentSlide, setCurrentSlide] = useState<number>(initial.slide);
+  const [surplusAsHours, setSurplusAsHours] = useState<boolean>(initial.surplusAsHours);
 
-  // When time unit changes, swap default hours
+  // Reset hours when time unit changes (only after first render)
+  const firstRun = useRef(true);
   useEffect(() => {
+    if (firstRun.current) { firstRun.current = false; return; }
     setHoursPerUnit(HOURS_PER_UNIT[timeUnit]);
   }, [timeUnit]);
 
-  // Derive monthly figures (everything in selected fiat)
-  const { income, surplus, breakEvenHrs, ratio, status, hourlyWage, monthlyHours } = useMemo(() => {
+  // Persist
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          fiat, crypto, expenses, wageAmount, payFreq, timeUnit,
+          hoursPerUnit, effort, taxEnabled, tax, slide: currentSlide,
+          surplusAsHours,
+        }),
+      );
+    } catch {}
+  }, [fiat, crypto, expenses, wageAmount, payFreq, timeUnit, hoursPerUnit, effort, taxEnabled, tax, currentSlide, surplusAsHours]);
+
+  const taxRate = taxEnabled ? Math.max(0, Math.min(100, tax.federal + tax.state + tax.fica + tax.other)) / 100 : 0;
+
+  const { gross, income, surplus, breakEvenHrs, ratio, status, hourlyWage, netHourlyWage, monthlyHours } = useMemo(() => {
     const hoursPerWeekEquiv =
       timeUnit === "day" ? hoursPerUnit * 5 :
       timeUnit === "week" ? hoursPerUnit :
@@ -145,19 +195,20 @@ function Index() {
 
     const hourlyWage = toHourly(wageAmount, payFreq, hoursPerWeekEquiv);
     const monthlyHours = hoursPerUnit * UNIT_TO_MONTH[timeUnit];
-    const income = effort * monthlyHours * hourlyWage;
+    const gross = effort * monthlyHours * hourlyWage;
+    const income = gross * (1 - taxRate);
+    const netHourlyWage = hourlyWage * (1 - taxRate);
     const surplus = income - expenses;
-    const breakEvenHrs = hourlyWage > 0 ? expenses / (hourlyWage * effort) : 0;
+    const breakEvenHrs = netHourlyWage > 0 ? expenses / (netHourlyWage * effort) : 0;
     const ratio = expenses > 0 ? income / expenses : 0;
-    const status: Status =
-      ratio >= 1.2 ? "sustainable" : ratio >= 1 ? "thin" : "deficit";
-    return { income, surplus, breakEvenHrs, ratio, status, hourlyWage, monthlyHours };
-  }, [expenses, wageAmount, payFreq, hoursPerUnit, timeUnit, effort]);
+    const status: Status = ratio >= 1.2 ? "sustainable" : ratio >= 1 ? "thin" : "deficit";
+    return { gross, income, surplus, breakEvenHrs, ratio, status, hourlyWage, netHourlyWage, monthlyHours };
+  }, [expenses, wageAmount, payFreq, hoursPerUnit, timeUnit, effort, taxRate]);
 
   // Crypto equivalents
-  const usdRate = FIAT_PER_USD[fiat];
+  const usdRate = fiat === "NONE" ? 1 : FIAT_PER_USD[fiat];
   const incomeUSD = income / usdRate;
-  const cryptoEquivalent = incomeUSD / USD_PER_CRYPTO[crypto];
+  const cryptoEquivalent = crypto === "NONE" ? 0 : incomeUSD / USD_PER_CRYPTO[crypto];
 
   return (
     <main className="min-h-screen bg-background text-foreground">
@@ -175,14 +226,14 @@ function Index() {
           </p>
         </header>
 
-        {/* Hero — visualization gallery */}
+        {/* Hero */}
         <section className="py-10 md:py-14 border-b border-border">
           <div className="flex items-baseline justify-between mb-6">
             <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
               Visualization
             </p>
             <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-              swipe to change view
+              swipe · arrow keys
             </p>
           </div>
           <VisualizationGallery
@@ -192,6 +243,8 @@ function Index() {
             income={income}
             expenses={expenses}
             fiat={fiat}
+            initialIndex={initialSlide}
+            onChange={setCurrentSlide}
           />
         </section>
 
@@ -202,33 +255,32 @@ function Index() {
               I. Inputs
             </p>
 
-            {/* Currency selectors */}
             <div className="grid grid-cols-2 gap-x-8 gap-y-6 mb-8">
               <SelectField
                 label="Fiat denomination"
                 value={fiat}
                 onChange={(v) => setFiat(v as FiatCode)}
-                options={Object.keys(FIAT_PER_USD)}
+                options={["NONE", ...Object.keys(FIAT_PER_USD)]}
               />
               <SelectField
                 label="Crypto denomination"
                 value={crypto}
                 onChange={(v) => setCrypto(v as CryptoCode)}
-                options={Object.keys(USD_PER_CRYPTO)}
+                options={["NONE", ...Object.keys(USD_PER_CRYPTO)]}
               />
             </div>
 
             <div className="grid grid-cols-2 gap-x-8 gap-y-6">
               <NumberField
                 label={`Monthly expenses (M)`}
-                suffix={fiat}
+                suffix={fiat === "NONE" ? "" : fiat}
                 value={expenses}
                 onChange={setExpenses}
                 step={50}
               />
               <NumberField
                 label={`Wage / pay (C)`}
-                suffix={`${FIAT_SYMBOL[fiat]} / ${payFreq}`}
+                suffix={`${FIAT_SYMBOL[fiat] || ""} / ${payFreq}`.trim()}
                 value={wageAmount}
                 onChange={setWageAmount}
                 step={1}
@@ -259,6 +311,22 @@ function Index() {
                 step={0.1}
               />
             </div>
+
+            {/* Tax toggle */}
+            <div className="mt-8 flex items-center justify-between border-t border-border pt-6">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={taxEnabled}
+                  onChange={(e) => setTaxEnabled(e.target.checked)}
+                  className="h-4 w-4 accent-foreground cursor-pointer"
+                />
+                <span className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                  Apply estimated taxes {taxEnabled && `(${(taxRate * 100).toFixed(1)}%)`}
+                </span>
+              </label>
+              <TaxSettingsDialog tax={tax} onChange={setTax} />
+            </div>
           </div>
 
           {/* Reading */}
@@ -268,18 +336,25 @@ function Index() {
             </p>
             <dl className="divide-y divide-border border-y border-border">
               <Row label="Effective hourly wage" value={fmtFiat(hourlyWage, fiat)} />
+              {taxEnabled && <Row label="After-tax hourly wage" value={fmtFiat(netHourlyWage, fiat)} />}
               <Row label="Monthly hours worked" value={`${monthlyHours.toFixed(0)} hrs`} />
-              <Row label="Gross monthly income" value={fmtFiat(income, fiat)} />
-              <Row
-                label="Surplus / deficit"
-                value={`${surplus >= 0 ? "+" : "−"}${fmtFiat(Math.abs(surplus), fiat)}`}
+              <Row label={taxEnabled ? "Gross monthly income" : "Gross monthly income"} value={fmtFiat(gross, fiat)} />
+              {taxEnabled && <Row label="Net (take-home) income" value={fmtFiat(income, fiat)} />}
+              <SurplusRow
+                surplus={surplus}
+                fiat={fiat}
+                hourlyWage={netHourlyWage}
+                asHours={surplusAsHours}
+                onToggle={() => setSurplusAsHours((v) => !v)}
               />
               <Row label="Break-even hours / mo." value={`${breakEvenHrs.toFixed(1)} hrs`} />
               <Row label="Income / expense ratio" value={`${ratio.toFixed(2)}×`} />
-              <Row
-                label={`Income in ${crypto}`}
-                value={`${cryptoEquivalent.toFixed(crypto === "USDC" ? 0 : 6)} ${crypto}`}
-              />
+              {crypto !== "NONE" && (
+                <Row
+                  label={`Income in ${crypto}`}
+                  value={`${cryptoEquivalent.toFixed(crypto === "USDC" ? 0 : 6)} ${crypto}`}
+                />
+              )}
             </dl>
           </div>
         </section>
@@ -291,7 +366,7 @@ function Index() {
               III. Income vs Expenses
             </p>
             <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground tabular">
-              monthly · {fiat}
+              monthly · {fiat === "NONE" ? "—" : fiat}
             </p>
           </div>
           <IncomeExpenseChart income={income} expenses={expenses} fiat={fiat} status={status} />
@@ -303,18 +378,14 @@ function Index() {
             "Money is the measure of effort exchanged for time."
           </p>
           <div className="flex items-center gap-2">
-            <button
-              onClick={() =>
-                exportPDF({
-                  fiat, crypto, expenses, wageAmount, payFreq, timeUnit,
-                  hoursPerUnit, effort, hourlyWage, monthlyHours,
-                  income, surplus, breakEvenHrs, ratio, status, cryptoEquivalent,
-                })
-              }
-              className="inline-flex items-center gap-2 border border-border px-3 py-1.5 hover:bg-foreground hover:text-background transition-colors"
-            >
-              <span className="tracking-[0.14em] uppercase text-[10px]">Export PDF</span>
-            </button>
+            <PdfPreviewButton
+              data={{
+                fiat, crypto, expenses, wageAmount, payFreq, timeUnit,
+                hoursPerUnit, effort, hourlyWage, monthlyHours,
+                income, gross, surplus, breakEvenHrs, ratio, status, cryptoEquivalent,
+                taxEnabled, taxRate,
+              }}
+            />
             <SupportButton />
           </div>
         </footer>
@@ -332,9 +403,7 @@ const STATUS_COLOR: Record<Status, string> = {
   deficit: "oklch(0.55 0.18 25)",
 };
 
-function NumberField({
-  label, suffix, value, onChange, step = 1,
-}: {
+function NumberField({ label, suffix, value, onChange, step = 1 }: {
   label: string; suffix?: string; value: number; onChange: (v: number) => void; step?: number;
 }) {
   return (
@@ -355,9 +424,7 @@ function NumberField({
   );
 }
 
-function SelectField({
-  label, value, onChange, options,
-}: {
+function SelectField({ label, value, onChange, options }: {
   label: string; value: string; onChange: (v: string) => void; options: string[];
 }) {
   return (
@@ -387,34 +454,139 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
+function SurplusRow({ surplus, fiat, hourlyWage, asHours, onToggle }: {
+  surplus: number; fiat: FiatCode; hourlyWage: number; asHours: boolean; onToggle: () => void;
+}) {
+  const sign = surplus >= 0 ? "+" : "−";
+  const abs = Math.abs(surplus);
+  const hours = hourlyWage > 0 ? abs / hourlyWage : 0;
+  const display = asHours ? `${sign}${hours.toFixed(1)} hrs` : `${sign}${fmtFiat(abs, fiat)}`;
+  return (
+    <div className="flex items-baseline justify-between py-4 gap-4">
+      <dt className="flex items-center gap-2 text-sm text-muted-foreground">
+        Surplus / deficit
+        <button
+          onClick={onToggle}
+          className="text-[10px] uppercase tracking-[0.14em] border border-border px-1.5 py-0.5 hover:bg-foreground hover:text-background transition-colors"
+          aria-label="Toggle surplus display"
+          title={asHours ? "Show as currency" : "Show as hours"}
+        >
+          {asHours ? "hrs" : fiat === "NONE" ? "num" : fiat}
+        </button>
+      </dt>
+      <dd className="font-display tabular text-xl md:text-2xl">{display}</dd>
+    </div>
+  );
+}
+
+// ---------- Tax Settings Dialog ----------
+function TaxSettingsDialog({ tax, onChange }: { tax: TaxConfig; onChange: (t: TaxConfig) => void }) {
+  const [draft, setDraft] = useState<TaxConfig>(tax);
+  const [open, setOpen] = useState(false);
+  useEffect(() => { if (open) setDraft(tax); }, [open, tax]);
+  const total = draft.federal + draft.state + draft.fica + draft.other;
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <button
+          className="inline-flex items-center gap-1.5 border border-border px-2.5 py-1.5 hover:bg-foreground hover:text-background transition-colors"
+          aria-label="Tax settings"
+        >
+          <SettingsIcon className="h-3.5 w-3.5" />
+          <span className="text-[10px] uppercase tracking-[0.14em]">Configure</span>
+        </button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="font-display text-2xl">Tax & withholding</DialogTitle>
+          <DialogDescription>
+            Estimated rates applied to gross income. Adjust for your jurisdiction or use generic defaults.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          {([
+            ["federal", "Federal income tax"],
+            ["state", "State / local tax"],
+            ["fica", "FICA (Social Sec. + Medicare)"],
+            ["other", "Other withholdings"],
+          ] as const).map(([key, label]) => (
+            <label key={key} className="flex items-center justify-between gap-3">
+              <span className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">{label}</span>
+              <div className="flex items-baseline gap-1 border-b border-border w-32">
+                <input
+                  type="number"
+                  step={0.1}
+                  value={draft[key]}
+                  onChange={(e) => setDraft({ ...draft, [key]: parseFloat(e.target.value) || 0 })}
+                  className="tabular w-full bg-transparent text-lg font-display outline-none text-right"
+                />
+                <span className="text-xs text-muted-foreground">%</span>
+              </div>
+            </label>
+          ))}
+          <div className="flex items-center justify-between border-t border-border pt-3">
+            <span className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Total</span>
+            <span className="font-display tabular text-xl">{total.toFixed(2)}%</span>
+          </div>
+          <div className="flex gap-2 pt-1">
+            <Button variant="outline" size="sm" onClick={() => setDraft(DEFAULT_TAX)}>Reset to defaults</Button>
+            <Button variant="outline" size="sm" onClick={() => setDraft({ federal: 0, state: 0, fica: 0, other: 0 })}>Zero out</Button>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+          <Button onClick={() => { onChange(draft); setOpen(false); }}>Save</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ---------- Visualization Gallery ----------
 type VizProps = {
-  status: Status;
-  ratio: number;
-  surplus: number;
-  income: number;
-  expenses: number;
-  fiat: FiatCode;
+  status: Status; ratio: number; surplus: number;
+  income: number; expenses: number; fiat: FiatCode;
 };
 
-function VisualizationGallery(props: VizProps) {
+function VisualizationGallery(props: VizProps & { initialIndex: number; onChange: (i: number) => void }) {
+  const { initialIndex, onChange, ...vizProps } = props;
   const [api, setApi] = useState<CarouselApi>();
-  const [current, setCurrent] = useState(0);
+  const [current, setCurrent] = useState(initialIndex);
 
   const slides = [
-    { name: "Flame", node: <FlameViz {...props} /> },
-    { name: "Stopwatch", node: <StopwatchViz {...props} /> },
-    { name: "Greenspace", node: <GreenspaceViz {...props} /> },
-    { name: "Heartbeat", node: <HeartbeatViz {...props} /> },
-    { name: "Number", node: <BigNumberViz {...props} /> },
-    { name: "Grade", node: <GradeViz {...props} /> },
-    { name: "Atom", node: <AtomViz {...props} /> },
+    { name: "Flame", node: <FlameViz {...vizProps} /> },
+    { name: "Stopwatch", node: <StopwatchViz {...vizProps} /> },
+    { name: "Greenspace", node: <GreenspaceViz {...vizProps} /> },
+    { name: "Heartbeat", node: <HeartbeatViz {...vizProps} /> },
+    { name: "Number", node: <BigNumberViz {...vizProps} /> },
+    { name: "Grade", node: <GradeViz {...vizProps} /> },
+    { name: "Atom", node: <AtomViz {...vizProps} /> },
   ];
 
+  // Restore initial slide once api ready
   useEffect(() => {
     if (!api) return;
+    if (initialIndex > 0) api.scrollTo(initialIndex, true);
     setCurrent(api.selectedScrollSnap());
-    api.on("select", () => setCurrent(api.selectedScrollSnap()));
+    const handler = () => {
+      const i = api.selectedScrollSnap();
+      setCurrent(i);
+      onChange(i);
+    };
+    api.on("select", handler);
+    return () => { api.off("select", handler); };
+  }, [api]);
+
+  // Keyboard arrow navigation
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (e.key === "ArrowLeft") { e.preventDefault(); api?.scrollPrev(); }
+      else if (e.key === "ArrowRight") { e.preventDefault(); api?.scrollNext(); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, [api]);
 
   return (
@@ -436,7 +608,6 @@ function VisualizationGallery(props: VizProps) {
         <CarouselNext className="right-2 md:-right-12" />
       </Carousel>
 
-      {/* Dots + counter */}
       <div className="flex items-center justify-between mt-4 gap-4">
         <button
           onClick={() => api?.scrollPrev()}
@@ -473,7 +644,6 @@ function VisualizationGallery(props: VizProps) {
 }
 
 // ---------- Visualizations ----------
-
 function StatusLabel({ status }: { status: Status }) {
   return (
     <div className="absolute bottom-3 right-4 flex items-center gap-2 text-[10px] uppercase tracking-[0.2em]">
@@ -483,16 +653,13 @@ function StatusLabel({ status }: { status: Status }) {
   );
 }
 
-// 1. Flame — height/intensity reflects ratio. Sustainable = steady tall warm; deficit = wild flicker
 function FlameViz({ status, ratio }: VizProps) {
   const intensity = Math.min(Math.max(ratio, 0.3), 2);
   const speed = status === "deficit" ? "0.4s" : status === "thin" ? "0.9s" : "1.6s";
   const color = status === "deficit" ? "oklch(0.65 0.22 30)" : status === "thin" ? "oklch(0.78 0.18 70)" : "oklch(0.78 0.16 90)";
   return (
     <div className="absolute inset-0 flex items-end justify-center pb-12">
-      <style>{`
-        @keyframes flicker { 0%,100%{transform:scaleY(1) scaleX(1);} 25%{transform:scaleY(1.15) scaleX(0.92);} 50%{transform:scaleY(0.9) scaleX(1.08);} 75%{transform:scaleY(1.08) scaleX(0.95);} }
-      `}</style>
+      <style>{`@keyframes flicker { 0%,100%{transform:scaleY(1) scaleX(1);} 25%{transform:scaleY(1.15) scaleX(0.92);} 50%{transform:scaleY(0.9) scaleX(1.08);} 75%{transform:scaleY(1.08) scaleX(0.95);} }`}</style>
       <svg width="240" height="320" viewBox="0 0 240 320">
         <defs>
           <radialGradient id="fl" cx="50%" cy="80%">
@@ -502,15 +669,8 @@ function FlameViz({ status, ratio }: VizProps) {
           </radialGradient>
         </defs>
         <g style={{ transformOrigin: "120px 280px", animation: `flicker ${speed} ease-in-out infinite` }}>
-          <path
-            d={`M120 ${280 - 200 * intensity} C 60 ${260 - 100 * intensity}, 60 240, 120 280 C 180 240, 180 ${260 - 100 * intensity}, 120 ${280 - 200 * intensity} Z`}
-            fill="url(#fl)"
-          />
-          <path
-            d={`M120 ${280 - 130 * intensity} C 90 250, 90 240, 120 280 C 150 240, 150 250, 120 ${280 - 130 * intensity} Z`}
-            fill={color}
-            opacity="0.9"
-          />
+          <path d={`M120 ${280 - 200 * intensity} C 60 ${260 - 100 * intensity}, 60 240, 120 280 C 180 240, 180 ${260 - 100 * intensity}, 120 ${280 - 200 * intensity} Z`} fill="url(#fl)" />
+          <path d={`M120 ${280 - 130 * intensity} C 90 250, 90 240, 120 280 C 150 240, 150 250, 120 ${280 - 130 * intensity} Z`} fill={color} opacity="0.9" />
         </g>
         <ellipse cx="120" cy="290" rx="60" ry="6" fill="oklch(0.3 0.02 60)" opacity="0.3" />
       </svg>
@@ -519,7 +679,6 @@ function FlameViz({ status, ratio }: VizProps) {
   );
 }
 
-// 2. Stopwatch — analog clock with sweeping second hand; speed reflects status
 function StopwatchViz({ status, ratio }: VizProps) {
   const speed = status === "deficit" ? "1.5s" : status === "thin" ? "4s" : "8s";
   const tickColor = STATUS_COLOR[status];
@@ -529,13 +688,7 @@ function StopwatchViz({ status, ratio }: VizProps) {
       <svg width="280" height="280" viewBox="0 0 200 200">
         <circle cx="100" cy="100" r="92" fill="none" stroke="var(--color-border)" strokeWidth="2" />
         {Array.from({ length: 60 }).map((_, i) => (
-          <line
-            key={i}
-            x1="100" y1="12" x2="100" y2={i % 5 === 0 ? "22" : "16"}
-            stroke="var(--color-muted-foreground)"
-            strokeWidth={i % 5 === 0 ? 1.5 : 0.5}
-            transform={`rotate(${i * 6} 100 100)`}
-          />
+          <line key={i} x1="100" y1="12" x2="100" y2={i % 5 === 0 ? "22" : "16"} stroke="var(--color-muted-foreground)" strokeWidth={i % 5 === 0 ? 1.5 : 0.5} transform={`rotate(${i * 6} 100 100)`} />
         ))}
         <g style={{ transformOrigin: "100px 100px", animation: `sweep ${speed} linear infinite` }}>
           <line x1="100" y1="100" x2="100" y2="20" stroke={tickColor} strokeWidth="2" />
@@ -551,7 +704,6 @@ function StopwatchViz({ status, ratio }: VizProps) {
   );
 }
 
-// 3. Greenspace — sun, tree, rain animation
 function GreenspaceViz({ status }: VizProps) {
   const sky =
     status === "sustainable" ? "linear-gradient(180deg, oklch(0.85 0.08 220), oklch(0.95 0.04 90))"
@@ -569,7 +721,6 @@ function GreenspaceViz({ status }: VizProps) {
         {status === "sustainable" && (
           <>
             <circle cx="500" cy="90" r="40" fill="oklch(0.92 0.15 90)" style={{ animation: "shine 3s ease-in-out infinite" }} />
-            {/* Rainbow */}
             {["oklch(0.7 0.2 25)","oklch(0.8 0.18 65)","oklch(0.85 0.18 100)","oklch(0.7 0.18 150)","oklch(0.65 0.18 230)","oklch(0.55 0.2 290)"].map((c, i) => (
               <path key={i} d={`M 50 ${320 - i * 8} A 250 250 0 0 1 550 ${320 - i * 8}`} fill="none" stroke={c} strokeWidth="6" opacity="0.7" />
             ))}
@@ -584,19 +735,12 @@ function GreenspaceViz({ status }: VizProps) {
         {status === "deficit" && (
           <>
             {Array.from({ length: 30 }).map((_, i) => (
-              <line key={i}
-                x1={50 + i * 18} y1="100" x2={45 + i * 18} y2="120"
-                stroke="oklch(0.7 0.1 230)" strokeWidth="1.5"
-                style={{ animation: `rain ${0.6 + (i % 5) * 0.1}s linear infinite`, animationDelay: `${(i % 7) * 0.15}s` }}
-              />
+              <line key={i} x1={50 + i * 18} y1="100" x2={45 + i * 18} y2="120" stroke="oklch(0.7 0.1 230)" strokeWidth="1.5" style={{ animation: `rain ${0.6 + (i % 5) * 0.1}s linear infinite`, animationDelay: `${(i % 7) * 0.15}s` }} />
             ))}
-            {/* Flooding */}
             <rect x="0" y="340" width="600" height="100" fill="oklch(0.45 0.08 230)" opacity="0.6" />
           </>
         )}
-        {/* Ground */}
         <rect x="0" y="360" width="600" height="80" fill={status === "sustainable" ? "oklch(0.55 0.15 145)" : "oklch(0.4 0.06 130)"} />
-        {/* Tree */}
         <g style={{ transformOrigin: "300px 360px", animation: "sway 3s ease-in-out infinite" }}>
           <rect x="290" y="280" width="20" height="90" fill="oklch(0.35 0.05 60)" />
           <circle cx="300" cy="260" r="60" fill={status === "deficit" ? "oklch(0.4 0.08 100)" : "oklch(0.55 0.16 145)"} />
@@ -609,15 +753,11 @@ function GreenspaceViz({ status }: VizProps) {
   );
 }
 
-// 4. Heartbeat ECG
 function HeartbeatViz({ status, ratio }: VizProps) {
   const speed = status === "deficit" ? "0.5s" : status === "thin" ? "1.2s" : "2s";
   const color = STATUS_COLOR[status];
-  // Deficit ratio < 0.5 = flatline-ish
   const flat = ratio < 0.4;
-  const path = flat
-    ? "M0 60 L600 60"
-    : "M0 60 L120 60 L140 60 L160 30 L180 90 L200 20 L220 100 L240 60 L600 60";
+  const path = flat ? "M0 60 L600 60" : "M0 60 L120 60 L140 60 L160 30 L180 90 L200 20 L220 100 L240 60 L600 60";
   return (
     <div className="absolute inset-0 flex flex-col items-center justify-center bg-[oklch(0.12_0.01_260)]">
       <style>{`
@@ -625,26 +765,14 @@ function HeartbeatViz({ status, ratio }: VizProps) {
         @keyframes pulse { 0%,100%{opacity:0.5;} 50%{opacity:1;} }
       `}</style>
       <svg width="100%" height="220" viewBox="0 0 600 120" preserveAspectRatio="none">
-        {/* grid */}
         {Array.from({ length: 30 }).map((_, i) => (
           <line key={`v${i}`} x1={i * 20} y1="0" x2={i * 20} y2="120" stroke="oklch(0.2 0.05 150)" strokeWidth="0.5" />
         ))}
         {Array.from({ length: 6 }).map((_, i) => (
           <line key={`h${i}`} x1="0" y1={i * 20} x2="600" y2={i * 20} stroke="oklch(0.2 0.05 150)" strokeWidth="0.5" />
         ))}
-        <path
-          d={path}
-          fill="none"
-          stroke={color}
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          style={{
-            filter: `drop-shadow(0 0 6px ${color})`,
-            strokeDasharray: 1200,
-            animation: `scroll ${speed} linear infinite`,
-          }}
-        />
+        <path d={path} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+          style={{ filter: `drop-shadow(0 0 6px ${color})`, strokeDasharray: 1200, animation: `scroll ${speed} linear infinite` }} />
       </svg>
       <p className="absolute bottom-10 font-display tabular text-2xl" style={{ color, animation: `pulse ${speed} ease-in-out infinite` }}>
         {flat ? "—— flatline ——" : `${(60 / parseFloat(speed)).toFixed(0)} bpm`}
@@ -654,7 +782,6 @@ function HeartbeatViz({ status, ratio }: VizProps) {
   );
 }
 
-// 5. Big Number
 function BigNumberViz({ status, surplus, fiat }: VizProps) {
   const color = STATUS_COLOR[status];
   return (
@@ -662,10 +789,7 @@ function BigNumberViz({ status, surplus, fiat }: VizProps) {
       <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground mb-3">
         Monthly {surplus >= 0 ? "surplus" : "deficit"}
       </p>
-      <p
-        className="font-display tabular leading-none text-center"
-        style={{ color, fontSize: "clamp(64px, 14vw, 160px)" }}
-      >
+      <p className="font-display tabular leading-none text-center" style={{ color, fontSize: "clamp(64px, 14vw, 160px)" }}>
         {surplus >= 0 ? "+" : "−"}{fmtFiat(Math.abs(surplus), fiat)}
       </p>
       <StatusLabel status={status} />
@@ -673,13 +797,8 @@ function BigNumberViz({ status, surplus, fiat }: VizProps) {
   );
 }
 
-// 6. Grade
 function GradeViz({ status, ratio }: VizProps) {
-  const grade =
-    ratio >= 1.6 ? "A" :
-    ratio >= 1.3 ? "B" :
-    ratio >= 1.05 ? "C" :
-    ratio >= 0.85 ? "D" : "F";
+  const grade = ratio >= 1.6 ? "A" : ratio >= 1.3 ? "B" : ratio >= 1.05 ? "C" : ratio >= 0.85 ? "D" : "F";
   const color = STATUS_COLOR[status];
   const note =
     grade === "A" ? "Outstanding margin." :
@@ -691,10 +810,7 @@ function GradeViz({ status, ratio }: VizProps) {
     <div className="absolute inset-0 flex items-center justify-center bg-[oklch(0.97_0.01_80)] dark:bg-[oklch(0.16_0.01_80)]">
       <div className="text-center">
         <p className="font-display italic text-sm text-muted-foreground mb-2">Final mark</p>
-        <div
-          className="font-display leading-none mb-4"
-          style={{ color, fontSize: "260px", textShadow: `0 4px 30px ${color}40` }}
-        >
+        <div className="font-display leading-none mb-4" style={{ color, fontSize: "260px", textShadow: `0 4px 30px ${color}40` }}>
           {grade}
         </div>
         <p className="font-display italic text-base text-muted-foreground max-w-xs mx-auto">{note}</p>
@@ -704,7 +820,6 @@ function GradeViz({ status, ratio }: VizProps) {
   );
 }
 
-// 7. Atom
 function AtomViz({ status, ratio }: VizProps) {
   const speed = status === "deficit" ? "1.2s" : status === "thin" ? "3s" : "6s";
   const color = STATUS_COLOR[status];
@@ -734,9 +849,7 @@ function AtomViz({ status, ratio }: VizProps) {
 }
 
 // ---------- Income vs Expense Chart ----------
-function IncomeExpenseChart({
-  income, expenses, fiat, status,
-}: { income: number; expenses: number; fiat: FiatCode; status: Status }) {
+function IncomeExpenseChart({ income, expenses, fiat, status }: { income: number; expenses: number; fiat: FiatCode; status: Status }) {
   const data = [
     { name: "Income", value: Math.round(income), fill: STATUS_COLOR[status] },
     { name: "Expenses", value: Math.round(expenses), fill: "oklch(0.55 0.05 260)" },
@@ -747,43 +860,10 @@ function IncomeExpenseChart({
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data} margin={{ top: 16, right: 16, left: 8, bottom: 8 }}>
           <CartesianGrid strokeDasharray="2 4" stroke="var(--color-border)" vertical={false} />
-          <XAxis
-            dataKey="name"
-            stroke="var(--color-muted-foreground)"
-            tick={{ fontSize: 11, letterSpacing: 1.5 }}
-            axisLine={{ stroke: "var(--color-border)" }}
-            tickLine={false}
-          />
-          <YAxis
-            stroke="var(--color-muted-foreground)"
-            tick={{ fontSize: 11 }}
-            tickFormatter={(v) => fmtFiat(v, fiat)}
-            domain={[0, max]}
-            axisLine={false}
-            tickLine={false}
-            width={80}
-          />
-          <Tooltip
-            cursor={{ fill: "var(--color-muted)", opacity: 0.3 }}
-            contentStyle={{
-              background: "var(--color-background)",
-              border: "1px solid var(--color-border)",
-              borderRadius: 4,
-              fontSize: 12,
-            }}
-            formatter={(v: number) => fmtFiat(v, fiat)}
-          />
-          <ReferenceLine
-            y={expenses}
-            stroke="var(--color-muted-foreground)"
-            strokeDasharray="4 4"
-            label={{
-              value: "Break-even",
-              position: "right",
-              fill: "var(--color-muted-foreground)",
-              fontSize: 10,
-            }}
-          />
+          <XAxis dataKey="name" stroke="var(--color-muted-foreground)" tick={{ fontSize: 11, letterSpacing: 1.5 }} axisLine={{ stroke: "var(--color-border)" }} tickLine={false} />
+          <YAxis stroke="var(--color-muted-foreground)" tick={{ fontSize: 11 }} tickFormatter={(v) => fmtFiat(v, fiat)} domain={[0, max]} axisLine={false} tickLine={false} width={80} />
+          <Tooltip cursor={{ fill: "var(--color-muted)", opacity: 0.3 }} contentStyle={{ background: "var(--color-background)", border: "1px solid var(--color-border)", borderRadius: 4, fontSize: 12 }} formatter={(v: number) => fmtFiat(v, fiat)} />
+          <ReferenceLine y={expenses} stroke="var(--color-muted-foreground)" strokeDasharray="4 4" label={{ value: "Break-even", position: "right", fill: "var(--color-muted-foreground)", fontSize: 10 }} />
           <Bar dataKey="value" radius={[4, 4, 0, 0]}>
             {data.map((d, i) => <Cell key={i} fill={d.fill} />)}
           </Bar>
@@ -793,7 +873,7 @@ function IncomeExpenseChart({
   );
 }
 
-// ---------- Support button + donation modal ----------
+// ---------- Support button ----------
 function SupportButton() {
   const [copied, setCopied] = useState<string | null>(null);
   const addresses = [
@@ -824,11 +904,8 @@ function SupportButton() {
         </DialogHeader>
         <div className="space-y-2 py-2">
           {addresses.map((a) => (
-            <button
-              key={a.label}
-              onClick={() => copy(a.label, a.value)}
-              className="w-full text-left flex items-center justify-between gap-3 border border-border px-3 py-2.5 hover:bg-muted transition-colors"
-            >
+            <button key={a.label} onClick={() => copy(a.label, a.value)}
+              className="w-full text-left flex items-center justify-between gap-3 border border-border px-3 py-2.5 hover:bg-muted transition-colors">
               <div className="min-w-0">
                 <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">{a.label}</p>
                 <p className="tabular text-xs truncate">{a.value}</p>
@@ -840,122 +917,144 @@ function SupportButton() {
           ))}
         </div>
         <DialogFooter>
-          <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-            Thank you.
-          </p>
+          <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Thank you.</p>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
 
-// ---------- PDF Export ----------
+// ---------- PDF Preview + Export ----------
 type ExportData = {
   fiat: FiatCode; crypto: CryptoCode;
   expenses: number; wageAmount: number; payFreq: PayFreq; timeUnit: TimeUnit;
   hoursPerUnit: number; effort: number;
   hourlyWage: number; monthlyHours: number;
-  income: number; surplus: number; breakEvenHrs: number; ratio: number;
+  income: number; gross: number; surplus: number; breakEvenHrs: number; ratio: number;
   status: Status; cryptoEquivalent: number;
+  taxEnabled: boolean; taxRate: number;
 };
 
-function exportPDF(d: ExportData) {
+function buildPDF(d: ExportData): jsPDF {
   const doc = new jsPDF({ unit: "pt", format: "letter" });
   const W = doc.internal.pageSize.getWidth();
   const M = 56;
   let y = 64;
 
-  doc.setFont("times", "italic");
-  doc.setFontSize(10);
-  doc.setTextColor(120);
+  doc.setFont("times", "italic"); doc.setFontSize(10); doc.setTextColor(120);
   doc.text("AN INSTRUMENT FOR LABOR", M, y);
   y += 22;
-  doc.setFont("times", "normal");
-  doc.setFontSize(24);
-  doc.setTextColor(20);
+  doc.setFont("times", "normal"); doc.setFontSize(24); doc.setTextColor(20);
   doc.text("The Austin Equation", M, y);
   y += 18;
-  doc.setFont("times", "italic");
-  doc.setFontSize(11);
-  doc.setTextColor(110);
+  doc.setFont("times", "italic"); doc.setFontSize(11); doc.setTextColor(110);
   doc.text("M = E · T · C", M, y);
 
-  // Status banner
   y += 28;
-  doc.setDrawColor(200);
-  doc.line(M, y, W - M, y);
+  doc.setDrawColor(200); doc.line(M, y, W - M, y);
   y += 22;
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
-  doc.setTextColor(80);
+  doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.setTextColor(80);
   doc.text("STATUS", M, y);
-  doc.setFont("times", "normal");
-  doc.setFontSize(20);
-  doc.setTextColor(20);
+  doc.setFont("times", "normal"); doc.setFontSize(20); doc.setTextColor(20);
   doc.text(d.status.toUpperCase(), M + 80, y + 2);
   y += 14;
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(11);
-  doc.setTextColor(80);
-  const sign = d.surplus >= 0 ? "+" : "−";
+  doc.setFont("helvetica", "normal"); doc.setFontSize(11); doc.setTextColor(80);
+  const sign = d.surplus >= 0 ? "+" : "-";
   doc.text(`${sign}${fmtFiat(Math.abs(d.surplus), d.fiat)} per month`, M + 80, y + 14);
   y += 36;
 
   const section = (title: string) => {
     y += 10;
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.setTextColor(80);
+    doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.setTextColor(80);
     doc.text(title.toUpperCase(), M, y);
     y += 6;
-    doc.setDrawColor(220);
-    doc.line(M, y, W - M, y);
+    doc.setDrawColor(220); doc.line(M, y, W - M, y);
     y += 16;
   };
   const row = (label: string, value: string) => {
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    doc.setTextColor(110);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(110);
     doc.text(label, M, y);
-    doc.setFont("times", "normal");
-    doc.setFontSize(12);
-    doc.setTextColor(20);
+    doc.setFont("times", "normal"); doc.setFontSize(12); doc.setTextColor(20);
     doc.text(value, W - M, y, { align: "right" });
     y += 20;
   };
 
   section("I. Inputs");
   row("Fiat denomination", d.fiat);
+  if (d.crypto !== "NONE") row("Crypto denomination", d.crypto);
   row("Monthly expenses (M)", fmtFiat(d.expenses, d.fiat));
   row("Wage / pay (C)", `${fmtFiat(d.wageAmount, d.fiat)} / ${d.payFreq}`);
   row("Time scale", d.timeUnit);
   row(`Work hours / ${d.timeUnit} (T)`, `${d.hoursPerUnit} hrs`);
   row("Effort multiplier (E)", `${d.effort.toFixed(2)}`);
+  if (d.taxEnabled) row("Estimated tax rate", `${(d.taxRate * 100).toFixed(2)}%`);
 
   section("II. Reading");
   row("Effective hourly wage", fmtFiat(d.hourlyWage, d.fiat));
   row("Monthly hours worked", `${d.monthlyHours.toFixed(0)} hrs`);
-  row("Gross monthly income", fmtFiat(d.income, d.fiat));
+  row("Gross monthly income", fmtFiat(d.gross, d.fiat));
+  if (d.taxEnabled) row("Net (take-home) income", fmtFiat(d.income, d.fiat));
   row("Surplus / deficit", `${sign}${fmtFiat(Math.abs(d.surplus), d.fiat)}`);
   row("Break-even hours / mo.", `${d.breakEvenHrs.toFixed(1)} hrs`);
   row("Income / expense ratio", `${d.ratio.toFixed(2)}x`);
-  row(`Income in ${d.crypto}`, `${d.cryptoEquivalent.toFixed(d.crypto === "USDC" ? 2 : 6)} ${d.crypto}`);
+  if (d.crypto !== "NONE") {
+    row(`Income in ${d.crypto}`, `${d.cryptoEquivalent.toFixed(d.crypto === "USDC" ? 2 : 6)} ${d.crypto}`);
+  }
 
-  // Footer
-  doc.setFont("times", "italic");
-  doc.setFontSize(9);
-  doc.setTextColor(140);
-  doc.text(
-    `"Money is the measure of effort exchanged for time."`,
-    M,
-    doc.internal.pageSize.getHeight() - 40,
-  );
-  doc.text(
-    new Date().toLocaleDateString(),
-    W - M,
-    doc.internal.pageSize.getHeight() - 40,
-    { align: "right" },
-  );
+  doc.setFont("times", "italic"); doc.setFontSize(9); doc.setTextColor(140);
+  doc.text(`"Money is the measure of effort exchanged for time."`, M, doc.internal.pageSize.getHeight() - 40);
+  doc.text(new Date().toLocaleDateString(), W - M, doc.internal.pageSize.getHeight() - 40, { align: "right" });
 
-  doc.save(`austin-equation-${new Date().toISOString().slice(0, 10)}.pdf`);
+  return doc;
+}
+
+function PdfPreviewButton({ data }: { data: ExportData }) {
+  const [open, setOpen] = useState(false);
+  const [url, setUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const doc = buildPDF(data);
+    const blobUrl = doc.output("bloburl") as unknown as string;
+    setUrl(blobUrl.toString());
+    return () => {
+      // Revoke when closing
+      try { URL.revokeObjectURL(blobUrl.toString()); } catch {}
+      setUrl(null);
+    };
+  }, [open]);
+
+  const download = () => {
+    const doc = buildPDF(data);
+    doc.save(`austin-equation-${new Date().toISOString().slice(0, 10)}.pdf`);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <button className="inline-flex items-center gap-2 border border-border px-3 py-1.5 hover:bg-foreground hover:text-background transition-colors">
+          <span className="tracking-[0.14em] uppercase text-[10px]">Preview PDF</span>
+        </button>
+      </DialogTrigger>
+      <DialogContent className="max-w-4xl w-[95vw] h-[88vh] flex flex-col p-4 sm:p-6">
+        <DialogHeader>
+          <DialogTitle className="font-display text-2xl">PDF Summary Preview</DialogTitle>
+          <DialogDescription>Review the document before downloading.</DialogDescription>
+        </DialogHeader>
+        <div className="flex-1 min-h-0 border border-border bg-muted">
+          {url ? (
+            <iframe src={url} title="PDF preview" className="w-full h-full" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-xs text-muted-foreground">
+              Generating preview…
+            </div>
+          )}
+        </div>
+        <DialogFooter className="gap-2 pt-2">
+          <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+          <Button onClick={download}>Download PDF</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 }
