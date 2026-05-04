@@ -1145,6 +1145,18 @@ function PdfPreviewButton({ data }: { data: ExportData }) {
   const download = () => {
     const doc = buildPDF(data);
     doc.save(`austin-equation-${new Date().toISOString().slice(0, 10)}.pdf`);
+    toast.success("PDF downloaded");
+  };
+
+  const print = () => {
+    const doc = buildPDF(data);
+    // Save then open print dialog
+    doc.save(`austin-equation-${new Date().toISOString().slice(0, 10)}.pdf`);
+    const blobUrl = doc.output("bloburl") as unknown as string;
+    const w = window.open(blobUrl.toString(), "_blank");
+    if (w) {
+      w.addEventListener("load", () => { try { w.print(); } catch {} });
+    }
   };
 
   return (
@@ -1157,7 +1169,7 @@ function PdfPreviewButton({ data }: { data: ExportData }) {
       <DialogContent className="max-w-4xl w-[95vw] h-[88vh] flex flex-col p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle className="font-display text-2xl">PDF Summary Preview</DialogTitle>
-          <DialogDescription>Review the document before downloading.</DialogDescription>
+          <DialogDescription>Review the document before downloading or printing.</DialogDescription>
         </DialogHeader>
         <div className="flex-1 min-h-0 border border-border bg-muted">
           {url ? (
@@ -1168,9 +1180,69 @@ function PdfPreviewButton({ data }: { data: ExportData }) {
             </div>
           )}
         </div>
-        <DialogFooter className="gap-2 pt-2">
+        <DialogFooter className="gap-2 pt-2 sm:justify-end">
           <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-          <Button onClick={download}>Download PDF</Button>
+          <Button variant="outline" onClick={print}>
+            <Printer className="h-4 w-4" /> Print PDF
+          </Button>
+          <Button onClick={download}>
+            <Download className="h-4 w-4" /> Download PDF
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ---------- Share button ----------
+function ShareButton({ state }: { state: typeof DEFAULTS }) {
+  const share = async () => {
+    const encoded = encodeShare(state);
+    const url = `${window.location.origin}${window.location.pathname}?s=${encoded}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success("Share link copied to clipboard");
+    } catch {
+      // Fallback: prompt
+      window.prompt("Copy your share link:", url);
+    }
+  };
+  return (
+    <button
+      onClick={share}
+      className="inline-flex items-center gap-1.5 border border-border px-3 py-1.5 hover:bg-foreground hover:text-background transition-colors"
+      aria-label="Copy shareable link"
+    >
+      <Share2 className="h-3.5 w-3.5" />
+      <span className="tracking-[0.14em] uppercase text-[10px]">Share</span>
+    </button>
+  );
+}
+
+// ---------- Reset button ----------
+function ResetButton({ onReset }: { onReset: () => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <button
+          className="inline-flex items-center gap-1.5 border border-border px-3 py-1.5 hover:bg-destructive hover:text-destructive-foreground transition-colors"
+          aria-label="Reset all settings"
+        >
+          <RotateCcw className="h-3.5 w-3.5" />
+          <span className="tracking-[0.14em] uppercase text-[10px]">Reset</span>
+        </button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="font-display text-2xl">Reset all settings?</DialogTitle>
+          <DialogDescription>
+            This clears your inputs, tax configuration, and saved visualization slide. This cannot be undone.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="gap-2">
+          <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+          <Button variant="destructive" onClick={() => { setOpen(false); onReset(); }}>Reset everything</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
