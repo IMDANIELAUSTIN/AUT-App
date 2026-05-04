@@ -30,7 +30,8 @@ import {
   YAxis,
 } from "recharts";
 import jsPDF from "jspdf";
-import { Settings as SettingsIcon } from "lucide-react";
+import { Settings as SettingsIcon, Share2, Printer, Download, RotateCcw } from "lucide-react";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/")({
   component: Index,
@@ -123,6 +124,21 @@ const DEFAULT_TAX: TaxConfig = { federal: 12, state: 5, fica: 7.65, other: 0 };
 // ---------- Persistence ----------
 const STORAGE_KEY = "austin-equation:v2";
 
+const DEFAULTS = {
+  fiat: "USD" as FiatCode,
+  crypto: "BTC" as CryptoCode,
+  expenses: 3200,
+  wageAmount: 1120,
+  payFreq: "weekly" as PayFreq,
+  timeUnit: "week" as TimeUnit,
+  hoursPerUnit: 40,
+  effort: 1,
+  taxEnabled: false,
+  tax: DEFAULT_TAX,
+  slide: 0,
+  surplusAsHours: false,
+};
+
 function loadState<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
   try {
@@ -133,22 +149,31 @@ function loadState<T>(key: string, fallback: T): T {
   }
 }
 
+// Encode/decode share state
+function encodeShare(state: typeof DEFAULTS): string {
+  try {
+    const json = JSON.stringify(state);
+    return btoa(unescape(encodeURIComponent(json)));
+  } catch { return ""; }
+}
+function decodeShare(s: string): Partial<typeof DEFAULTS> | null {
+  try {
+    const json = decodeURIComponent(escape(atob(s)));
+    return JSON.parse(json);
+  } catch { return null; }
+}
+function readShareFromUrl(): Partial<typeof DEFAULTS> | null {
+  if (typeof window === "undefined") return null;
+  const params = new URLSearchParams(window.location.search);
+  const s = params.get("s");
+  return s ? decodeShare(s) : null;
+}
+
 // ---------- Component ----------
 function Index() {
-  const initial = loadState(STORAGE_KEY, {
-    fiat: "USD" as FiatCode,
-    crypto: "BTC" as CryptoCode,
-    expenses: 3200,
-    wageAmount: 1120,
-    payFreq: "weekly" as PayFreq,
-    timeUnit: "week" as TimeUnit,
-    hoursPerUnit: 40,
-    effort: 1,
-    taxEnabled: false,
-    tax: DEFAULT_TAX,
-    slide: 0,
-    surplusAsHours: false,
-  });
+  const persisted = loadState(STORAGE_KEY, DEFAULTS);
+  const shared = typeof window !== "undefined" ? readShareFromUrl() : null;
+  const initial = { ...persisted, ...(shared || {}) };
 
   const [fiat, setFiat] = useState<FiatCode>(initial.fiat);
   const [crypto, setCrypto] = useState<CryptoCode>(initial.crypto);
@@ -163,6 +188,17 @@ function Index() {
   const [initialSlide] = useState<number>(initial.slide);
   const [currentSlide, setCurrentSlide] = useState<number>(initial.slide);
   const [surplusAsHours, setSurplusAsHours] = useState<boolean>(initial.surplusAsHours);
+
+  // If we got state from URL, persist it then strip the param
+  useEffect(() => {
+    if (shared && typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("s");
+      window.history.replaceState({}, "", url.toString());
+      toast.success("Shared scenario loaded");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Reset hours when time unit changes (only after first render)
   const firstRun = useRef(true);
@@ -369,7 +405,7 @@ function Index() {
               monthly · {fiat === "NONE" ? "—" : fiat}
             </p>
           </div>
-          <IncomeExpenseChart income={income} expenses={expenses} fiat={fiat} status={status} />
+          <IncomeExpenseChart income={income} expenses={expenses} fiat={fiat} status={status} surplusAsHours={surplusAsHours} hourlyWage={netHourlyWage} />
         </section>
 
         {/* Footer */}
@@ -377,7 +413,15 @@ function Index() {
           <p className="font-display italic">
             "Money is the measure of effort exchanged for time."
           </p>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <ShareButton state={{
+              fiat, crypto, expenses, wageAmount, payFreq, timeUnit,
+              hoursPerUnit, effort, taxEnabled, tax, slide: currentSlide, surplusAsHours,
+            }} />
+            <ResetButton onReset={() => {
+              try { localStorage.removeItem(STORAGE_KEY); } catch {}
+              window.location.reload();
+            }} />
             <PdfPreviewButton
               data={{
                 fiat, crypto, expenses, wageAmount, payFreq, timeUnit,
@@ -552,6 +596,8 @@ function VisualizationGallery(props: VizProps & { initialIndex: number; onChange
   const { initialIndex, onChange, ...vizProps } = props;
   const [api, setApi] = useState<CarouselApi>();
   const [current, setCurrent] = useState(initialIndex);
+  const slideRefs = useRef<Array<HTMLDivElement | null>>([]);
+  const userInteracted = useRef(false);
 
   const slides = [
     { name: "Flame", node: <FlameViz {...vizProps} /> },
@@ -563,7 +609,6 @@ function VisualizationGallery(props: VizProps & { initialIndex: number; onChange
     { name: "Atom", node: <AtomViz {...vizProps} /> },
   ];
 
-  // Restore initial slide once api ready
   useEffect(() => {
     if (!api) return;
     if (initialIndex > 0) api.scrollTo(initialIndex, true);
@@ -572,30 +617,50 @@ function VisualizationGallery(props: VizProps & { initialIndex: number; onChange
       const i = api.selectedScrollSnap();
       setCurrent(i);
       onChange(i);
+      // Move focus to active slide on user-driven change
+      if (userInteracted.current) {
+        slideRefs.current[i]?.focus({ preventScroll: true });
+      }
     };
     api.on("select", handler);
     return () => { api.off("select", handler); };
   }, [api]);
 
-  // Keyboard arrow navigation
+  const goPrev = () => { userInteracted.current = true; api?.scrollPrev(); };
+  const goNext = () => { userInteracted.current = true; api?.scrollNext(); };
+  const goTo = (i: number) => { userInteracted.current = true; api?.scrollTo(i); };
+
+  // Global keyboard arrow navigation
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-      if (e.key === "ArrowLeft") { e.preventDefault(); api?.scrollPrev(); }
-      else if (e.key === "ArrowRight") { e.preventDefault(); api?.scrollNext(); }
+      if (e.key === "ArrowLeft") { e.preventDefault(); goPrev(); }
+      else if (e.key === "ArrowRight") { e.preventDefault(); goNext(); }
+      else if (e.key === "Home") { e.preventDefault(); goTo(0); }
+      else if (e.key === "End") { e.preventDefault(); goTo(slides.length - 1); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [api]);
 
+  const activeName = slides[current]?.name ?? "";
+  const announcement = `Slide ${current + 1} of ${slides.length}: ${activeName}. Status ${vizProps.status}.`;
+
   return (
-    <div className="relative">
+    <div className="relative" role="region" aria-roledescription="carousel" aria-label="Financial visualizations">
       <Carousel setApi={setApi} opts={{ loop: true }}>
         <CarouselContent>
           {slides.map((s, i) => (
             <CarouselItem key={i}>
-              <div className="relative h-[360px] md:h-[440px] border border-border bg-card overflow-hidden">
+              <div
+                ref={(el) => { slideRefs.current[i] = el; }}
+                tabIndex={i === current ? 0 : -1}
+                role="group"
+                aria-roledescription="slide"
+                aria-label={`${i + 1} of ${slides.length}: ${s.name} — ${vizProps.status}`}
+                className="relative h-[360px] md:h-[440px] border border-border bg-card overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-foreground"
+              >
                 {s.node}
                 <div className="absolute top-3 left-4 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
                   {String(i + 1).padStart(2, "0")} · {s.name}
@@ -604,24 +669,31 @@ function VisualizationGallery(props: VizProps & { initialIndex: number; onChange
             </CarouselItem>
           ))}
         </CarouselContent>
-        <CarouselPrevious className="left-2 md:-left-12" />
-        <CarouselNext className="right-2 md:-right-12" />
+        <CarouselPrevious className="left-2 md:-left-12" onClick={goPrev} />
+        <CarouselNext className="right-2 md:-right-12" onClick={goNext} />
       </Carousel>
+
+      {/* Live region for screen readers */}
+      <div className="sr-only" aria-live="polite" aria-atomic="true">
+        {announcement}
+      </div>
 
       <div className="flex items-center justify-between mt-4 gap-4">
         <button
-          onClick={() => api?.scrollPrev()}
-          aria-label="Previous"
+          onClick={goPrev}
+          aria-label="Previous slide"
           className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground transition-colors"
         >
           ← Prev
         </button>
-        <div className="flex items-center gap-1.5">
-          {slides.map((_, i) => (
+        <div className="flex items-center gap-1.5" role="tablist">
+          {slides.map((s, i) => (
             <button
               key={i}
-              aria-label={`Go to slide ${i + 1}`}
-              onClick={() => api?.scrollTo(i)}
+              role="tab"
+              aria-selected={i === current}
+              aria-label={`Go to slide ${i + 1}: ${s.name}`}
+              onClick={() => goTo(i)}
               className={`h-1.5 rounded-full transition-all ${
                 i === current ? "w-6 bg-foreground" : "w-1.5 bg-border hover:bg-muted-foreground"
               }`}
@@ -629,15 +701,15 @@ function VisualizationGallery(props: VizProps & { initialIndex: number; onChange
           ))}
         </div>
         <button
-          onClick={() => api?.scrollNext()}
-          aria-label="Next"
+          onClick={goNext}
+          aria-label="Next slide"
           className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground transition-colors"
         >
           Next →
         </button>
       </div>
       <p className="text-center mt-2 text-[10px] uppercase tracking-[0.2em] text-muted-foreground tabular">
-        {String(current + 1).padStart(2, "0")} / {String(slides.length).padStart(2, "0")} · {slides[current]?.name}
+        {String(current + 1).padStart(2, "0")} / {String(slides.length).padStart(2, "0")} · {activeName}
       </p>
     </div>
   );
@@ -849,21 +921,67 @@ function AtomViz({ status, ratio }: VizProps) {
 }
 
 // ---------- Income vs Expense Chart ----------
-function IncomeExpenseChart({ income, expenses, fiat, status }: { income: number; expenses: number; fiat: FiatCode; status: Status }) {
-  const data = [
-    { name: "Income", value: Math.round(income), fill: STATUS_COLOR[status] },
-    { name: "Expenses", value: Math.round(expenses), fill: "oklch(0.55 0.05 260)" },
-  ];
-  const max = Math.max(income, expenses) * 1.15;
+function IncomeExpenseChart({ income, expenses, fiat, status, surplusAsHours, hourlyWage }: {
+  income: number; expenses: number; fiat: FiatCode; status: Status;
+  surplusAsHours: boolean; hourlyWage: number;
+}) {
+  const surplus = income - expenses;
+  // When showing in hours, convert dollar amounts into hours-worked equivalents.
+  const toHours = (v: number) => (hourlyWage > 0 ? v / hourlyWage : 0);
+  const fmt = (v: number) => surplusAsHours ? `${v.toFixed(1)} hrs` : fmtFiat(v, fiat);
+
+  const data = surplusAsHours
+    ? [
+        { name: "Income", value: +toHours(income).toFixed(1), fill: STATUS_COLOR[status] },
+        { name: "Expenses", value: +toHours(expenses).toFixed(1), fill: "oklch(0.55 0.05 260)" },
+      ]
+    : [
+        { name: "Income", value: Math.round(income), fill: STATUS_COLOR[status] },
+        { name: "Expenses", value: Math.round(expenses), fill: "oklch(0.55 0.05 260)" },
+      ];
+  const max = Math.max(data[0].value, data[1].value) * 1.15;
+
+  const refY = surplusAsHours ? toHours(expenses) : expenses;
+  const refLabel = surplusAsHours
+    ? `Break-even · ${toHours(expenses).toFixed(1)} hrs`
+    : `Break-even · ${fmtFiat(expenses, fiat)}`;
+  const surplusLabelY = surplusAsHours ? toHours(income) : income;
+  const surplusLabelText = surplus >= 0
+    ? `Surplus +${fmt(Math.abs(surplus))}`
+    : `Deficit −${fmt(Math.abs(surplus))}`;
+
   return (
     <div className="w-full h-[280px] md:h-[340px]">
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} margin={{ top: 16, right: 16, left: 8, bottom: 8 }}>
+        <BarChart data={data} margin={{ top: 24, right: 16, left: 8, bottom: 8 }}>
           <CartesianGrid strokeDasharray="2 4" stroke="var(--color-border)" vertical={false} />
           <XAxis dataKey="name" stroke="var(--color-muted-foreground)" tick={{ fontSize: 11, letterSpacing: 1.5 }} axisLine={{ stroke: "var(--color-border)" }} tickLine={false} />
-          <YAxis stroke="var(--color-muted-foreground)" tick={{ fontSize: 11 }} tickFormatter={(v) => fmtFiat(v, fiat)} domain={[0, max]} axisLine={false} tickLine={false} width={80} />
-          <Tooltip cursor={{ fill: "var(--color-muted)", opacity: 0.3 }} contentStyle={{ background: "var(--color-background)", border: "1px solid var(--color-border)", borderRadius: 4, fontSize: 12 }} formatter={(v: number) => fmtFiat(v, fiat)} />
-          <ReferenceLine y={expenses} stroke="var(--color-muted-foreground)" strokeDasharray="4 4" label={{ value: "Break-even", position: "right", fill: "var(--color-muted-foreground)", fontSize: 10 }} />
+          <YAxis
+            stroke="var(--color-muted-foreground)"
+            tick={{ fontSize: 11 }}
+            tickFormatter={(v) => surplusAsHours ? `${v}h` : fmtFiat(v, fiat)}
+            domain={[0, max]}
+            axisLine={false}
+            tickLine={false}
+            width={80}
+          />
+          <Tooltip
+            cursor={{ fill: "var(--color-muted)", opacity: 0.3 }}
+            contentStyle={{ background: "var(--color-background)", border: "1px solid var(--color-border)", borderRadius: 4, fontSize: 12 }}
+            formatter={(v: number) => fmt(v)}
+          />
+          <ReferenceLine
+            y={refY}
+            stroke="var(--color-muted-foreground)"
+            strokeDasharray="4 4"
+            label={{ value: refLabel, position: "insideTopRight", fill: "var(--color-muted-foreground)", fontSize: 10 }}
+          />
+          <ReferenceLine
+            y={surplusLabelY}
+            stroke={STATUS_COLOR[status]}
+            strokeDasharray="2 2"
+            label={{ value: surplusLabelText, position: "insideTopLeft", fill: STATUS_COLOR[status], fontSize: 10 }}
+          />
           <Bar dataKey="value" radius={[4, 4, 0, 0]}>
             {data.map((d, i) => <Cell key={i} fill={d.fill} />)}
           </Bar>
@@ -1027,6 +1145,18 @@ function PdfPreviewButton({ data }: { data: ExportData }) {
   const download = () => {
     const doc = buildPDF(data);
     doc.save(`austin-equation-${new Date().toISOString().slice(0, 10)}.pdf`);
+    toast.success("PDF downloaded");
+  };
+
+  const print = () => {
+    const doc = buildPDF(data);
+    // Save then open print dialog
+    doc.save(`austin-equation-${new Date().toISOString().slice(0, 10)}.pdf`);
+    const blobUrl = doc.output("bloburl") as unknown as string;
+    const w = window.open(blobUrl.toString(), "_blank");
+    if (w) {
+      w.addEventListener("load", () => { try { w.print(); } catch {} });
+    }
   };
 
   return (
@@ -1039,7 +1169,7 @@ function PdfPreviewButton({ data }: { data: ExportData }) {
       <DialogContent className="max-w-4xl w-[95vw] h-[88vh] flex flex-col p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle className="font-display text-2xl">PDF Summary Preview</DialogTitle>
-          <DialogDescription>Review the document before downloading.</DialogDescription>
+          <DialogDescription>Review the document before downloading or printing.</DialogDescription>
         </DialogHeader>
         <div className="flex-1 min-h-0 border border-border bg-muted">
           {url ? (
@@ -1050,9 +1180,69 @@ function PdfPreviewButton({ data }: { data: ExportData }) {
             </div>
           )}
         </div>
-        <DialogFooter className="gap-2 pt-2">
+        <DialogFooter className="gap-2 pt-2 sm:justify-end">
           <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-          <Button onClick={download}>Download PDF</Button>
+          <Button variant="outline" onClick={print}>
+            <Printer className="h-4 w-4" /> Print PDF
+          </Button>
+          <Button onClick={download}>
+            <Download className="h-4 w-4" /> Download PDF
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ---------- Share button ----------
+function ShareButton({ state }: { state: typeof DEFAULTS }) {
+  const share = async () => {
+    const encoded = encodeShare(state);
+    const url = `${window.location.origin}${window.location.pathname}?s=${encoded}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success("Share link copied to clipboard");
+    } catch {
+      // Fallback: prompt
+      window.prompt("Copy your share link:", url);
+    }
+  };
+  return (
+    <button
+      onClick={share}
+      className="inline-flex items-center gap-1.5 border border-border px-3 py-1.5 hover:bg-foreground hover:text-background transition-colors"
+      aria-label="Copy shareable link"
+    >
+      <Share2 className="h-3.5 w-3.5" />
+      <span className="tracking-[0.14em] uppercase text-[10px]">Share</span>
+    </button>
+  );
+}
+
+// ---------- Reset button ----------
+function ResetButton({ onReset }: { onReset: () => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <button
+          className="inline-flex items-center gap-1.5 border border-border px-3 py-1.5 hover:bg-destructive hover:text-destructive-foreground transition-colors"
+          aria-label="Reset all settings"
+        >
+          <RotateCcw className="h-3.5 w-3.5" />
+          <span className="tracking-[0.14em] uppercase text-[10px]">Reset</span>
+        </button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="font-display text-2xl">Reset all settings?</DialogTitle>
+          <DialogDescription>
+            This clears your inputs, tax configuration, and saved visualization slide. This cannot be undone.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="gap-2">
+          <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+          <Button variant="destructive" onClick={() => { setOpen(false); onReset(); }}>Reset everything</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
