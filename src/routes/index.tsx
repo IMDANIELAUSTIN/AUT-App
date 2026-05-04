@@ -30,7 +30,8 @@ import {
   YAxis,
 } from "recharts";
 import jsPDF from "jspdf";
-import { Settings as SettingsIcon } from "lucide-react";
+import { Settings as SettingsIcon, Share2, Printer, Download, RotateCcw } from "lucide-react";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/")({
   component: Index,
