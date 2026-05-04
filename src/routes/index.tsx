@@ -436,19 +436,38 @@ function VisualizationGallery(props: VizProps) {
         <CarouselNext className="right-2 md:-right-12" />
       </Carousel>
 
-      {/* Dots */}
-      <div className="flex justify-center gap-1.5 mt-4">
-        {slides.map((_, i) => (
-          <button
-            key={i}
-            aria-label={`Go to slide ${i + 1}`}
-            onClick={() => api?.scrollTo(i)}
-            className={`h-1.5 transition-all ${
-              i === current ? "w-6 bg-foreground" : "w-1.5 bg-border"
-            }`}
-          />
-        ))}
+      {/* Dots + counter */}
+      <div className="flex items-center justify-between mt-4 gap-4">
+        <button
+          onClick={() => api?.scrollPrev()}
+          aria-label="Previous"
+          className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground transition-colors"
+        >
+          ← Prev
+        </button>
+        <div className="flex items-center gap-1.5">
+          {slides.map((_, i) => (
+            <button
+              key={i}
+              aria-label={`Go to slide ${i + 1}`}
+              onClick={() => api?.scrollTo(i)}
+              className={`h-1.5 rounded-full transition-all ${
+                i === current ? "w-6 bg-foreground" : "w-1.5 bg-border hover:bg-muted-foreground"
+              }`}
+            />
+          ))}
+        </div>
+        <button
+          onClick={() => api?.scrollNext()}
+          aria-label="Next"
+          className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground transition-colors"
+        >
+          Next →
+        </button>
       </div>
+      <p className="text-center mt-2 text-[10px] uppercase tracking-[0.2em] text-muted-foreground tabular">
+        {String(current + 1).padStart(2, "0")} / {String(slides.length).padStart(2, "0")} · {slides[current]?.name}
+      </p>
     </div>
   );
 }
