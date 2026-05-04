@@ -732,3 +732,230 @@ function AtomViz({ status, ratio }: VizProps) {
     </div>
   );
 }
+
+// ---------- Income vs Expense Chart ----------
+function IncomeExpenseChart({
+  income, expenses, fiat, status,
+}: { income: number; expenses: number; fiat: FiatCode; status: Status }) {
+  const data = [
+    { name: "Income", value: Math.round(income), fill: STATUS_COLOR[status] },
+    { name: "Expenses", value: Math.round(expenses), fill: "oklch(0.55 0.05 260)" },
+  ];
+  const max = Math.max(income, expenses) * 1.15;
+  return (
+    <div className="w-full h-[280px] md:h-[340px]">
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={data} margin={{ top: 16, right: 16, left: 8, bottom: 8 }}>
+          <CartesianGrid strokeDasharray="2 4" stroke="var(--color-border)" vertical={false} />
+          <XAxis
+            dataKey="name"
+            stroke="var(--color-muted-foreground)"
+            tick={{ fontSize: 11, letterSpacing: 1.5 }}
+            axisLine={{ stroke: "var(--color-border)" }}
+            tickLine={false}
+          />
+          <YAxis
+            stroke="var(--color-muted-foreground)"
+            tick={{ fontSize: 11 }}
+            tickFormatter={(v) => fmtFiat(v, fiat)}
+            domain={[0, max]}
+            axisLine={false}
+            tickLine={false}
+            width={80}
+          />
+          <Tooltip
+            cursor={{ fill: "var(--color-muted)", opacity: 0.3 }}
+            contentStyle={{
+              background: "var(--color-background)",
+              border: "1px solid var(--color-border)",
+              borderRadius: 4,
+              fontSize: 12,
+            }}
+            formatter={(v: number) => fmtFiat(v, fiat)}
+          />
+          <ReferenceLine
+            y={expenses}
+            stroke="var(--color-muted-foreground)"
+            strokeDasharray="4 4"
+            label={{
+              value: "Break-even",
+              position: "right",
+              fill: "var(--color-muted-foreground)",
+              fontSize: 10,
+            }}
+          />
+          <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+            {data.map((d, i) => <Cell key={i} fill={d.fill} />)}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+// ---------- Support button + donation modal ----------
+function SupportButton() {
+  const [copied, setCopied] = useState<string | null>(null);
+  const addresses = [
+    { label: "BTC", value: "bc1qexamplebitcoinaddressreplaceme0000000" },
+    { label: "ETH", value: "0xExampleEthereumAddressReplaceMe000000000" },
+    { label: "SOL", value: "ExampleSolanaAddressReplaceMe00000000000" },
+  ];
+  const copy = async (label: string, value: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(label);
+      setTimeout(() => setCopied(null), 1500);
+    } catch {}
+  };
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <button className="inline-flex items-center gap-2 border border-border px-3 py-1.5 hover:bg-foreground hover:text-background transition-colors">
+          <span className="tracking-[0.14em] uppercase text-[10px]">♡ Support</span>
+        </button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="font-display text-2xl">Support development</DialogTitle>
+          <DialogDescription>
+            The Austin Equation is independent and ad-free. If it's useful to you, a small tip keeps it that way.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2 py-2">
+          {addresses.map((a) => (
+            <button
+              key={a.label}
+              onClick={() => copy(a.label, a.value)}
+              className="w-full text-left flex items-center justify-between gap-3 border border-border px-3 py-2.5 hover:bg-muted transition-colors"
+            >
+              <div className="min-w-0">
+                <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">{a.label}</p>
+                <p className="tabular text-xs truncate">{a.value}</p>
+              </div>
+              <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground shrink-0">
+                {copied === a.label ? "copied ✓" : "copy"}
+              </span>
+            </button>
+          ))}
+        </div>
+        <DialogFooter>
+          <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+            Thank you.
+          </p>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ---------- PDF Export ----------
+type ExportData = {
+  fiat: FiatCode; crypto: CryptoCode;
+  expenses: number; wageAmount: number; payFreq: PayFreq; timeUnit: TimeUnit;
+  hoursPerUnit: number; effort: number;
+  hourlyWage: number; monthlyHours: number;
+  income: number; surplus: number; breakEvenHrs: number; ratio: number;
+  status: Status; cryptoEquivalent: number;
+};
+
+function exportPDF(d: ExportData) {
+  const doc = new jsPDF({ unit: "pt", format: "letter" });
+  const W = doc.internal.pageSize.getWidth();
+  const M = 56;
+  let y = 64;
+
+  doc.setFont("times", "italic");
+  doc.setFontSize(10);
+  doc.setTextColor(120);
+  doc.text("AN INSTRUMENT FOR LABOR", M, y);
+  y += 22;
+  doc.setFont("times", "normal");
+  doc.setFontSize(24);
+  doc.setTextColor(20);
+  doc.text("The Austin Equation", M, y);
+  y += 18;
+  doc.setFont("times", "italic");
+  doc.setFontSize(11);
+  doc.setTextColor(110);
+  doc.text("M = E · T · C", M, y);
+
+  // Status banner
+  y += 28;
+  doc.setDrawColor(200);
+  doc.line(M, y, W - M, y);
+  y += 22;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(80);
+  doc.text("STATUS", M, y);
+  doc.setFont("times", "normal");
+  doc.setFontSize(20);
+  doc.setTextColor(20);
+  doc.text(d.status.toUpperCase(), M + 80, y + 2);
+  y += 14;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(11);
+  doc.setTextColor(80);
+  const sign = d.surplus >= 0 ? "+" : "−";
+  doc.text(`${sign}${fmtFiat(Math.abs(d.surplus), d.fiat)} per month`, M + 80, y + 14);
+  y += 36;
+
+  const section = (title: string) => {
+    y += 10;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(80);
+    doc.text(title.toUpperCase(), M, y);
+    y += 6;
+    doc.setDrawColor(220);
+    doc.line(M, y, W - M, y);
+    y += 16;
+  };
+  const row = (label: string, value: string) => {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(110);
+    doc.text(label, M, y);
+    doc.setFont("times", "normal");
+    doc.setFontSize(12);
+    doc.setTextColor(20);
+    doc.text(value, W - M, y, { align: "right" });
+    y += 20;
+  };
+
+  section("I. Inputs");
+  row("Fiat denomination", d.fiat);
+  row("Monthly expenses (M)", fmtFiat(d.expenses, d.fiat));
+  row("Wage / pay (C)", `${fmtFiat(d.wageAmount, d.fiat)} / ${d.payFreq}`);
+  row("Time scale", d.timeUnit);
+  row(`Work hours / ${d.timeUnit} (T)`, `${d.hoursPerUnit} hrs`);
+  row("Effort multiplier (E)", `${d.effort.toFixed(2)}`);
+
+  section("II. Reading");
+  row("Effective hourly wage", fmtFiat(d.hourlyWage, d.fiat));
+  row("Monthly hours worked", `${d.monthlyHours.toFixed(0)} hrs`);
+  row("Gross monthly income", fmtFiat(d.income, d.fiat));
+  row("Surplus / deficit", `${sign}${fmtFiat(Math.abs(d.surplus), d.fiat)}`);
+  row("Break-even hours / mo.", `${d.breakEvenHrs.toFixed(1)} hrs`);
+  row("Income / expense ratio", `${d.ratio.toFixed(2)}x`);
+  row(`Income in ${d.crypto}`, `${d.cryptoEquivalent.toFixed(d.crypto === "USDC" ? 2 : 6)} ${d.crypto}`);
+
+  // Footer
+  doc.setFont("times", "italic");
+  doc.setFontSize(9);
+  doc.setTextColor(140);
+  doc.text(
+    `"Money is the measure of effort exchanged for time."`,
+    M,
+    doc.internal.pageSize.getHeight() - 40,
+  );
+  doc.text(
+    new Date().toLocaleDateString(),
+    W - M,
+    doc.internal.pageSize.getHeight() - 40,
+    { align: "right" },
+  );
+
+  doc.save(`austin-equation-${new Date().toISOString().slice(0, 10)}.pdf`);
+}
