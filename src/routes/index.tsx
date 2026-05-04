@@ -124,6 +124,21 @@ const DEFAULT_TAX: TaxConfig = { federal: 12, state: 5, fica: 7.65, other: 0 };
 // ---------- Persistence ----------
 const STORAGE_KEY = "austin-equation:v2";
 
+const DEFAULTS = {
+  fiat: "USD" as FiatCode,
+  crypto: "BTC" as CryptoCode,
+  expenses: 3200,
+  wageAmount: 1120,
+  payFreq: "weekly" as PayFreq,
+  timeUnit: "week" as TimeUnit,
+  hoursPerUnit: 40,
+  effort: 1,
+  taxEnabled: false,
+  tax: DEFAULT_TAX,
+  slide: 0,
+  surplusAsHours: false,
+};
+
 function loadState<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
   try {
@@ -132,6 +147,26 @@ function loadState<T>(key: string, fallback: T): T {
   } catch {
     return fallback;
   }
+}
+
+// Encode/decode share state
+function encodeShare(state: typeof DEFAULTS): string {
+  try {
+    const json = JSON.stringify(state);
+    return btoa(unescape(encodeURIComponent(json)));
+  } catch { return ""; }
+}
+function decodeShare(s: string): Partial<typeof DEFAULTS> | null {
+  try {
+    const json = decodeURIComponent(escape(atob(s)));
+    return JSON.parse(json);
+  } catch { return null; }
+}
+function readShareFromUrl(): Partial<typeof DEFAULTS> | null {
+  if (typeof window === "undefined") return null;
+  const params = new URLSearchParams(window.location.search);
+  const s = params.get("s");
+  return s ? decodeShare(s) : null;
 }
 
 // ---------- Component ----------
