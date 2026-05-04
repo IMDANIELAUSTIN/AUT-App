@@ -921,21 +921,67 @@ function AtomViz({ status, ratio }: VizProps) {
 }
 
 // ---------- Income vs Expense Chart ----------
-function IncomeExpenseChart({ income, expenses, fiat, status }: { income: number; expenses: number; fiat: FiatCode; status: Status }) {
-  const data = [
-    { name: "Income", value: Math.round(income), fill: STATUS_COLOR[status] },
-    { name: "Expenses", value: Math.round(expenses), fill: "oklch(0.55 0.05 260)" },
-  ];
-  const max = Math.max(income, expenses) * 1.15;
+function IncomeExpenseChart({ income, expenses, fiat, status, surplusAsHours, hourlyWage }: {
+  income: number; expenses: number; fiat: FiatCode; status: Status;
+  surplusAsHours: boolean; hourlyWage: number;
+}) {
+  const surplus = income - expenses;
+  // When showing in hours, convert dollar amounts into hours-worked equivalents.
+  const toHours = (v: number) => (hourlyWage > 0 ? v / hourlyWage : 0);
+  const fmt = (v: number) => surplusAsHours ? `${v.toFixed(1)} hrs` : fmtFiat(v, fiat);
+
+  const data = surplusAsHours
+    ? [
+        { name: "Income", value: +toHours(income).toFixed(1), fill: STATUS_COLOR[status] },
+        { name: "Expenses", value: +toHours(expenses).toFixed(1), fill: "oklch(0.55 0.05 260)" },
+      ]
+    : [
+        { name: "Income", value: Math.round(income), fill: STATUS_COLOR[status] },
+        { name: "Expenses", value: Math.round(expenses), fill: "oklch(0.55 0.05 260)" },
+      ];
+  const max = Math.max(data[0].value, data[1].value) * 1.15;
+
+  const refY = surplusAsHours ? toHours(expenses) : expenses;
+  const refLabel = surplusAsHours
+    ? `Break-even · ${toHours(expenses).toFixed(1)} hrs`
+    : `Break-even · ${fmtFiat(expenses, fiat)}`;
+  const surplusLabelY = surplusAsHours ? toHours(income) : income;
+  const surplusLabelText = surplus >= 0
+    ? `Surplus +${fmt(Math.abs(surplus))}`
+    : `Deficit −${fmt(Math.abs(surplus))}`;
+
   return (
     <div className="w-full h-[280px] md:h-[340px]">
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} margin={{ top: 16, right: 16, left: 8, bottom: 8 }}>
+        <BarChart data={data} margin={{ top: 24, right: 16, left: 8, bottom: 8 }}>
           <CartesianGrid strokeDasharray="2 4" stroke="var(--color-border)" vertical={false} />
           <XAxis dataKey="name" stroke="var(--color-muted-foreground)" tick={{ fontSize: 11, letterSpacing: 1.5 }} axisLine={{ stroke: "var(--color-border)" }} tickLine={false} />
-          <YAxis stroke="var(--color-muted-foreground)" tick={{ fontSize: 11 }} tickFormatter={(v) => fmtFiat(v, fiat)} domain={[0, max]} axisLine={false} tickLine={false} width={80} />
-          <Tooltip cursor={{ fill: "var(--color-muted)", opacity: 0.3 }} contentStyle={{ background: "var(--color-background)", border: "1px solid var(--color-border)", borderRadius: 4, fontSize: 12 }} formatter={(v: number) => fmtFiat(v, fiat)} />
-          <ReferenceLine y={expenses} stroke="var(--color-muted-foreground)" strokeDasharray="4 4" label={{ value: "Break-even", position: "right", fill: "var(--color-muted-foreground)", fontSize: 10 }} />
+          <YAxis
+            stroke="var(--color-muted-foreground)"
+            tick={{ fontSize: 11 }}
+            tickFormatter={(v) => surplusAsHours ? `${v}h` : fmtFiat(v, fiat)}
+            domain={[0, max]}
+            axisLine={false}
+            tickLine={false}
+            width={80}
+          />
+          <Tooltip
+            cursor={{ fill: "var(--color-muted)", opacity: 0.3 }}
+            contentStyle={{ background: "var(--color-background)", border: "1px solid var(--color-border)", borderRadius: 4, fontSize: 12 }}
+            formatter={(v: number) => fmt(v)}
+          />
+          <ReferenceLine
+            y={refY}
+            stroke="var(--color-muted-foreground)"
+            strokeDasharray="4 4"
+            label={{ value: refLabel, position: "insideTopRight", fill: "var(--color-muted-foreground)", fontSize: 10 }}
+          />
+          <ReferenceLine
+            y={surplusLabelY}
+            stroke={STATUS_COLOR[status]}
+            strokeDasharray="2 2"
+            label={{ value: surplusLabelText, position: "insideTopLeft", fill: STATUS_COLOR[status], fontSize: 10 }}
+          />
           <Bar dataKey="value" radius={[4, 4, 0, 0]}>
             {data.map((d, i) => <Cell key={i} fill={d.fill} />)}
           </Bar>
