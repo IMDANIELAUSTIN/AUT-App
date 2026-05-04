@@ -18,6 +18,12 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Select as ShadcnSelect, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 import {
   Bar,
   BarChart,
@@ -250,163 +256,162 @@ function Index() {
     <main className="min-h-screen bg-background text-foreground">
       <div className="mx-auto max-w-6xl px-6 py-10 md:px-10 md:py-16">
         {/* Masthead */}
-        <header className="flex items-baseline justify-between border-b border-border pb-6">
+        <header className="flex flex-col md:flex-row md:items-baseline justify-between pb-6 gap-2">
           <div>
-            <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
+            <h1 className="text-3xl md:text-4xl font-bold tracking-tight">The Austin Equation</h1>
+            <p className="text-muted-foreground mt-1">
               An instrument for labor
             </p>
-            <h1 className="font-display text-2xl md:text-3xl mt-1">The Austin Equation</h1>
           </div>
-          <p className="hidden md:block font-display italic text-muted-foreground tabular">
+          <p className="hidden md:block text-muted-foreground tabular-nums font-mono text-sm">
             M = E · T · C
           </p>
         </header>
+        <Separator className="mb-8" />
 
         {/* Hero */}
-        <section className="py-10 md:py-14 border-b border-border">
-          <div className="flex items-baseline justify-between mb-6">
-            <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
-              Visualization
-            </p>
-            <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-              swipe · arrow keys
-            </p>
-          </div>
-          <VisualizationGallery
-            status={status}
-            ratio={ratio}
-            surplus={surplus}
-            income={income}
-            expenses={expenses}
-            fiat={fiat}
-            initialIndex={initialSlide}
-            onChange={setCurrentSlide}
-          />
-        </section>
+        <Card className="mb-8 overflow-hidden">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+            <CardTitle className="text-base font-semibold">Visualization</CardTitle>
+            <CardDescription className="text-xs">Swipe · Arrow keys</CardDescription>
+          </CardHeader>
+          <CardContent className="p-0 border-t">
+            <VisualizationGallery
+              status={status}
+              ratio={ratio}
+              surplus={surplus}
+              income={income}
+              expenses={expenses}
+              fiat={fiat}
+              initialIndex={initialSlide}
+              onChange={setCurrentSlide}
+            />
+          </CardContent>
+        </Card>
 
-        {/* Inputs */}
-        <section className="grid gap-12 lg:grid-cols-[1fr_1fr] py-10 md:py-14">
-          <div>
-            <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground mb-6">
-              I. Inputs
-            </p>
-
-            <div className="grid grid-cols-2 gap-x-8 gap-y-6 mb-8">
-              <SelectField
-                label="Fiat denomination"
-                value={fiat}
-                onChange={(v) => setFiat(v as FiatCode)}
-                options={["NONE", ...Object.keys(FIAT_PER_USD)]}
-              />
-              <SelectField
-                label="Crypto denomination"
-                value={crypto}
-                onChange={(v) => setCrypto(v as CryptoCode)}
-                options={["NONE", ...Object.keys(USD_PER_CRYPTO)]}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-x-8 gap-y-6">
-              <NumberField
-                label={`Monthly expenses (M)`}
-                suffix={fiat === "NONE" ? "" : fiat}
-                value={expenses}
-                onChange={setExpenses}
-                step={50}
-              />
-              <NumberField
-                label={`Wage / pay (C)`}
-                suffix={`${FIAT_SYMBOL[fiat] || ""} / ${payFreq}`.trim()}
-                value={wageAmount}
-                onChange={setWageAmount}
-                step={1}
-              />
-              <SelectField
-                label="Pay frequency"
-                value={payFreq}
-                onChange={(v) => setPayFreq(v as PayFreq)}
-                options={["hourly", "daily", "weekly", "biweekly", "monthly"]}
-              />
-              <SelectField
-                label="Time scale"
-                value={timeUnit}
-                onChange={(v) => setTimeUnit(v as TimeUnit)}
-                options={["day", "week", "month"]}
-              />
-              <NumberField
-                label={`Work hours / ${timeUnit} (T)`}
-                suffix="hrs"
-                value={hoursPerUnit}
-                onChange={setHoursPerUnit}
-                step={1}
-              />
-              <NumberField
-                label="Effort multiplier (E)"
-                value={effort}
-                onChange={setEffort}
-                step={0.1}
-              />
-            </div>
-
-            {/* Tax toggle */}
-            <div className="mt-8 flex items-center justify-between border-t border-border pt-6">
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={taxEnabled}
-                  onChange={(e) => setTaxEnabled(e.target.checked)}
-                  className="h-4 w-4 accent-foreground cursor-pointer"
+        {/* Inputs & Reading */}
+        <div className="grid gap-8 lg:grid-cols-2 mb-8">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base font-semibold">I. Inputs</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-x-6 gap-y-6 mb-8">
+                <SelectField
+                  label="Fiat denomination"
+                  value={fiat}
+                  onChange={(v) => setFiat(v as FiatCode)}
+                  options={["NONE", ...Object.keys(FIAT_PER_USD)]}
                 />
-                <span className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-                  Apply estimated taxes {taxEnabled && `(${(taxRate * 100).toFixed(1)}%)`}
-                </span>
-              </label>
-              <TaxSettingsDialog tax={tax} onChange={setTax} />
-            </div>
-          </div>
-
-          {/* Reading */}
-          <div>
-            <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground mb-6">
-              II. Reading
-            </p>
-            <dl className="divide-y divide-border border-y border-border">
-              <Row label="Effective hourly wage" value={fmtFiat(hourlyWage, fiat)} />
-              {taxEnabled && <Row label="After-tax hourly wage" value={fmtFiat(netHourlyWage, fiat)} />}
-              <Row label="Monthly hours worked" value={`${monthlyHours.toFixed(0)} hrs`} />
-              <Row label={taxEnabled ? "Gross monthly income" : "Gross monthly income"} value={fmtFiat(gross, fiat)} />
-              {taxEnabled && <Row label="Net (take-home) income" value={fmtFiat(income, fiat)} />}
-              <SurplusRow
-                surplus={surplus}
-                fiat={fiat}
-                hourlyWage={netHourlyWage}
-                asHours={surplusAsHours}
-                onToggle={() => setSurplusAsHours((v) => !v)}
-              />
-              <Row label="Break-even hours / mo." value={`${breakEvenHrs.toFixed(1)} hrs`} />
-              <Row label="Income / expense ratio" value={`${ratio.toFixed(2)}×`} />
-              {crypto !== "NONE" && (
-                <Row
-                  label={`Income in ${crypto}`}
-                  value={`${cryptoEquivalent.toFixed(crypto === "USDC" ? 0 : 6)} ${crypto}`}
+                <SelectField
+                  label="Crypto denomination"
+                  value={crypto}
+                  onChange={(v) => setCrypto(v as CryptoCode)}
+                  options={["NONE", ...Object.keys(USD_PER_CRYPTO)]}
                 />
-              )}
-            </dl>
-          </div>
-        </section>
+              </div>
+
+              <div className="grid grid-cols-2 gap-x-6 gap-y-6">
+                <NumberField
+                  label={`Monthly expenses (M)`}
+                  suffix={fiat === "NONE" ? "" : fiat}
+                  value={expenses}
+                  onChange={setExpenses}
+                  step={50}
+                />
+                <NumberField
+                  label={`Wage / pay (C)`}
+                  suffix={`${FIAT_SYMBOL[fiat] || ""} / ${payFreq}`.trim()}
+                  value={wageAmount}
+                  onChange={setWageAmount}
+                  step={1}
+                />
+                <SelectField
+                  label="Pay frequency"
+                  value={payFreq}
+                  onChange={(v) => setPayFreq(v as PayFreq)}
+                  options={["hourly", "daily", "weekly", "biweekly", "monthly"]}
+                />
+                <SelectField
+                  label="Time scale"
+                  value={timeUnit}
+                  onChange={(v) => setTimeUnit(v as TimeUnit)}
+                  options={["day", "week", "month"]}
+                />
+                <NumberField
+                  label={`Work hours / ${timeUnit} (T)`}
+                  suffix="hrs"
+                  value={hoursPerUnit}
+                  onChange={setHoursPerUnit}
+                  step={1}
+                />
+                <NumberField
+                  label="Effort multiplier (E)"
+                  value={effort}
+                  onChange={setEffort}
+                  step={0.1}
+                />
+              </div>
+
+              <Separator className="my-6" />
+              
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="tax-mode"
+                    checked={taxEnabled}
+                    onCheckedChange={setTaxEnabled}
+                  />
+                  <Label htmlFor="tax-mode" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer">
+                    Apply estimated taxes {taxEnabled && `(${(taxRate * 100).toFixed(1)}%)`}
+                  </Label>
+                </div>
+                <TaxSettingsDialog tax={tax} onChange={setTax} />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base font-semibold">II. Reading</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <dl className="divide-y divide-border">
+                <Row label="Effective hourly wage" value={fmtFiat(hourlyWage, fiat)} />
+                {taxEnabled && <Row label="After-tax hourly wage" value={fmtFiat(netHourlyWage, fiat)} />}
+                <Row label="Monthly hours worked" value={`${monthlyHours.toFixed(0)} hrs`} />
+                <Row label={taxEnabled ? "Gross monthly income" : "Gross monthly income"} value={fmtFiat(gross, fiat)} />
+                {taxEnabled && <Row label="Net (take-home) income" value={fmtFiat(income, fiat)} />}
+                <SurplusRow
+                  surplus={surplus}
+                  fiat={fiat}
+                  hourlyWage={netHourlyWage}
+                  asHours={surplusAsHours}
+                  onToggle={() => setSurplusAsHours((v) => !v)}
+                />
+                <Row label="Break-even hours / mo." value={`${breakEvenHrs.toFixed(1)} hrs`} />
+                <Row label="Income / expense ratio" value={`${ratio.toFixed(2)}×`} />
+                {crypto !== "NONE" && (
+                  <Row
+                    label={`Income in ${crypto}`}
+                    value={`${cryptoEquivalent.toFixed(crypto === "USDC" ? 0 : 6)} ${crypto}`}
+                  />
+                )}
+              </dl>
+            </CardContent>
+          </Card>
+        </div>
 
         {/* Comparison chart */}
-        <section className="border-b border-border py-10 md:py-14">
-          <div className="flex items-baseline justify-between mb-6">
-            <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
-              III. Income vs Expenses
-            </p>
-            <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground tabular">
-              monthly · {fiat === "NONE" ? "—" : fiat}
-            </p>
-          </div>
-          <IncomeExpenseChart income={income} expenses={expenses} fiat={fiat} status={status} surplusAsHours={surplusAsHours} hourlyWage={netHourlyWage} />
-        </section>
+        <Card className="mb-8">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+            <CardTitle className="text-base font-semibold">III. Income vs Expenses</CardTitle>
+            <CardDescription className="text-xs">monthly · {fiat === "NONE" ? "—" : fiat}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <IncomeExpenseChart income={income} expenses={expenses} fiat={fiat} status={status} surplusAsHours={surplusAsHours} hourlyWage={netHourlyWage} />
+          </CardContent>
+        </Card>
 
         {/* Footer */}
         <footer className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-t border-border pt-6 text-xs text-muted-foreground">
@@ -451,20 +456,24 @@ function NumberField({ label, suffix, value, onChange, step = 1 }: {
   label: string; suffix?: string; value: number; onChange: (v: number) => void; step?: number;
 }) {
   return (
-    <label className="flex flex-col gap-1.5">
-      <span className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">{label}</span>
-      <div className="flex items-baseline gap-2 border-b border-border py-2 focus-within:border-foreground transition-colors">
-        <input
+    <div className="flex flex-col gap-2">
+      <Label className="text-muted-foreground">{label}</Label>
+      <div className="relative">
+        <Input
           type="number"
           inputMode="decimal"
           step={step}
           value={Number.isFinite(value) ? value : 0}
           onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
-          className="tabular w-full bg-transparent text-2xl font-display outline-none"
+          className={suffix ? "pr-12 tabular-nums font-medium" : "tabular-nums font-medium"}
         />
-        {suffix && <span className="text-xs text-muted-foreground tracking-wide whitespace-nowrap">{suffix}</span>}
+        {suffix && (
+          <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-muted-foreground text-sm font-medium">
+            {suffix}
+          </div>
+        )}
       </div>
-    </label>
+    </div>
   );
 }
 
@@ -472,28 +481,29 @@ function SelectField({ label, value, onChange, options }: {
   label: string; value: string; onChange: (v: string) => void; options: string[];
 }) {
   return (
-    <label className="flex flex-col gap-1.5">
-      <span className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">{label}</span>
-      <div className="border-b border-border py-2 focus-within:border-foreground transition-colors">
-        <select
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="tabular w-full bg-transparent text-2xl font-display outline-none capitalize cursor-pointer"
-        >
+    <div className="flex flex-col gap-2">
+      <Label className="text-muted-foreground">{label}</Label>
+      <ShadcnSelect value={value} onValueChange={onChange}>
+        <SelectTrigger className="w-full capitalize tabular-nums font-medium">
+          <SelectValue placeholder="Select..." />
+        </SelectTrigger>
+        <SelectContent>
           {options.map((o) => (
-            <option key={o} value={o}>{o}</option>
+            <SelectItem key={o} value={o} className="capitalize tabular-nums">
+              {o}
+            </SelectItem>
           ))}
-        </select>
-      </div>
-    </label>
+        </SelectContent>
+      </ShadcnSelect>
+    </div>
   );
 }
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-baseline justify-between py-4">
-      <dt className="text-sm text-muted-foreground">{label}</dt>
-      <dd className="font-display tabular text-xl md:text-2xl">{value}</dd>
+    <div className="flex items-center justify-between py-3">
+      <dt className="text-sm font-medium text-muted-foreground">{label}</dt>
+      <dd className="tabular-nums font-semibold text-lg">{value}</dd>
     </div>
   );
 }
@@ -506,19 +516,21 @@ function SurplusRow({ surplus, fiat, hourlyWage, asHours, onToggle }: {
   const hours = hourlyWage > 0 ? abs / hourlyWage : 0;
   const display = asHours ? `${sign}${hours.toFixed(1)} hrs` : `${sign}${fmtFiat(abs, fiat)}`;
   return (
-    <div className="flex items-baseline justify-between py-4 gap-4">
-      <dt className="flex items-center gap-2 text-sm text-muted-foreground">
+    <div className="flex items-center justify-between py-3 gap-4">
+      <dt className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
         Surplus / deficit
-        <button
+        <Button
+          variant="outline"
+          size="sm"
           onClick={onToggle}
-          className="text-[10px] uppercase tracking-[0.14em] border border-border px-1.5 py-0.5 hover:bg-foreground hover:text-background transition-colors"
+          className="h-6 px-2 text-[10px] uppercase tracking-wider"
           aria-label="Toggle surplus display"
           title={asHours ? "Show as currency" : "Show as hours"}
         >
           {asHours ? "hrs" : fiat === "NONE" ? "num" : fiat}
-        </button>
+        </Button>
       </dt>
-      <dd className="font-display tabular text-xl md:text-2xl">{display}</dd>
+      <dd className="tabular-nums font-semibold text-lg">{display}</dd>
     </div>
   );
 }
@@ -532,49 +544,49 @@ function TaxSettingsDialog({ tax, onChange }: { tax: TaxConfig; onChange: (t: Ta
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <button
-          className="inline-flex items-center gap-1.5 border border-border px-2.5 py-1.5 hover:bg-foreground hover:text-background transition-colors"
-          aria-label="Tax settings"
-        >
-          <SettingsIcon className="h-3.5 w-3.5" />
-          <span className="text-[10px] uppercase tracking-[0.14em]">Configure</span>
-        </button>
+        <Button variant="outline" size="sm" className="gap-1.5" aria-label="Tax settings">
+          <SettingsIcon className="h-4 w-4" />
+          <span>Configure Tax</span>
+        </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="font-display text-2xl">Tax & withholding</DialogTitle>
+          <DialogTitle>Tax & Withholding</DialogTitle>
           <DialogDescription>
             Estimated rates applied to gross income. Adjust for your jurisdiction or use generic defaults.
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-4 py-2">
+        <div className="grid gap-4 py-4">
           {([
             ["federal", "Federal income tax"],
             ["state", "State / local tax"],
             ["fica", "FICA (Social Sec. + Medicare)"],
             ["other", "Other withholdings"],
           ] as const).map(([key, label]) => (
-            <label key={key} className="flex items-center justify-between gap-3">
-              <span className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">{label}</span>
-              <div className="flex items-baseline gap-1 border-b border-border w-32">
-                <input
+            <div key={key} className="grid grid-cols-4 items-center gap-4">
+              <Label className="col-span-2 text-muted-foreground">{label}</Label>
+              <div className="col-span-2 relative">
+                <Input
                   type="number"
                   step={0.1}
                   value={draft[key]}
                   onChange={(e) => setDraft({ ...draft, [key]: parseFloat(e.target.value) || 0 })}
-                  className="tabular w-full bg-transparent text-lg font-display outline-none text-right"
+                  className="pr-8 tabular-nums font-medium text-right"
                 />
-                <span className="text-xs text-muted-foreground">%</span>
+                <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-muted-foreground text-sm font-medium">
+                  %
+                </div>
               </div>
-            </label>
+            </div>
           ))}
-          <div className="flex items-center justify-between border-t border-border pt-3">
-            <span className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Total</span>
-            <span className="font-display tabular text-xl">{total.toFixed(2)}%</span>
+          <Separator />
+          <div className="flex items-center justify-between">
+            <span className="font-semibold">Total</span>
+            <span className="tabular-nums font-bold text-lg">{total.toFixed(2)}%</span>
           </div>
-          <div className="flex gap-2 pt-1">
-            <Button variant="outline" size="sm" onClick={() => setDraft(DEFAULT_TAX)}>Reset to defaults</Button>
-            <Button variant="outline" size="sm" onClick={() => setDraft({ federal: 0, state: 0, fica: 0, other: 0 })}>Zero out</Button>
+          <div className="flex gap-2 pt-2">
+            <Button variant="secondary" size="sm" onClick={() => setDraft(DEFAULT_TAX)}>Defaults</Button>
+            <Button variant="secondary" size="sm" onClick={() => setDraft({ federal: 0, state: 0, fica: 0, other: 0 })}>Zero</Button>
           </div>
         </div>
         <DialogFooter>
@@ -1009,13 +1021,13 @@ function SupportButton() {
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <button className="inline-flex items-center gap-2 border border-border px-3 py-1.5 hover:bg-foreground hover:text-background transition-colors">
-          <span className="tracking-[0.14em] uppercase text-[10px]">♡ Support</span>
-        </button>
+        <Button variant="outline" size="sm" className="gap-2">
+          <span>♡ Support</span>
+        </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="font-display text-2xl">Support development</DialogTitle>
+          <DialogTitle>Support development</DialogTitle>
           <DialogDescription>
             The Austin Equation is independent and ad-free. If it's useful to you, a small tip keeps it that way.
           </DialogDescription>
@@ -1162,13 +1174,13 @@ function PdfPreviewButton({ data }: { data: ExportData }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <button className="inline-flex items-center gap-2 border border-border px-3 py-1.5 hover:bg-foreground hover:text-background transition-colors">
-          <span className="tracking-[0.14em] uppercase text-[10px]">Preview PDF</span>
-        </button>
+        <Button variant="outline" size="sm" className="gap-2">
+          <span>Preview PDF</span>
+        </Button>
       </DialogTrigger>
       <DialogContent className="max-w-4xl w-[95vw] h-[88vh] flex flex-col p-4 sm:p-6">
         <DialogHeader>
-          <DialogTitle className="font-display text-2xl">PDF Summary Preview</DialogTitle>
+          <DialogTitle>PDF Summary Preview</DialogTitle>
           <DialogDescription>Review the document before downloading or printing.</DialogDescription>
         </DialogHeader>
         <div className="flex-1 min-h-0 border border-border bg-muted">
@@ -1208,14 +1220,16 @@ function ShareButton({ state }: { state: typeof DEFAULTS }) {
     }
   };
   return (
-    <button
+    <Button
+      variant="outline"
+      size="sm"
       onClick={share}
-      className="inline-flex items-center gap-1.5 border border-border px-3 py-1.5 hover:bg-foreground hover:text-background transition-colors"
+      className="gap-1.5"
       aria-label="Copy shareable link"
     >
-      <Share2 className="h-3.5 w-3.5" />
-      <span className="tracking-[0.14em] uppercase text-[10px]">Share</span>
-    </button>
+      <Share2 className="h-4 w-4" />
+      <span>Share</span>
+    </Button>
   );
 }
 
@@ -1225,17 +1239,19 @@ function ResetButton({ onReset }: { onReset: () => void }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <button
-          className="inline-flex items-center gap-1.5 border border-border px-3 py-1.5 hover:bg-destructive hover:text-destructive-foreground transition-colors"
+        <Button
+          variant="destructive"
+          size="sm"
+          className="gap-1.5"
           aria-label="Reset all settings"
         >
-          <RotateCcw className="h-3.5 w-3.5" />
-          <span className="tracking-[0.14em] uppercase text-[10px]">Reset</span>
-        </button>
+          <RotateCcw className="h-4 w-4" />
+          <span>Reset</span>
+        </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
-          <DialogTitle className="font-display text-2xl">Reset all settings?</DialogTitle>
+          <DialogTitle>Reset all settings?</DialogTitle>
           <DialogDescription>
             This clears your inputs, tax configuration, and saved visualization slide. This cannot be undone.
           </DialogDescription>
