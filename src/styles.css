@@ -139,8 +139,23 @@
     border-color: var(--color-border);
   }
 
+  html {
+    font-family: var(--font-sans);
+  }
+
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
+    font-feature-settings: "ss01", "cv11";
+  }
+
+  .font-display {
+    font-family: var(--font-display);
+    font-feature-settings: "ss01";
+    letter-spacing: -0.02em;
+  }
+
+  .tabular {
+    font-variant-numeric: tabular-nums;
   }
 }
