@@ -596,6 +596,8 @@ function VisualizationGallery(props: VizProps & { initialIndex: number; onChange
   const { initialIndex, onChange, ...vizProps } = props;
   const [api, setApi] = useState<CarouselApi>();
   const [current, setCurrent] = useState(initialIndex);
+  const slideRefs = useRef<Array<HTMLDivElement | null>>([]);
+  const userInteracted = useRef(false);
 
   const slides = [
     { name: "Flame", node: <FlameViz {...vizProps} /> },
@@ -607,7 +609,6 @@ function VisualizationGallery(props: VizProps & { initialIndex: number; onChange
     { name: "Atom", node: <AtomViz {...vizProps} /> },
   ];
 
-  // Restore initial slide once api ready
   useEffect(() => {
     if (!api) return;
     if (initialIndex > 0) api.scrollTo(initialIndex, true);
@@ -616,30 +617,50 @@ function VisualizationGallery(props: VizProps & { initialIndex: number; onChange
       const i = api.selectedScrollSnap();
       setCurrent(i);
       onChange(i);
+      // Move focus to active slide on user-driven change
+      if (userInteracted.current) {
+        slideRefs.current[i]?.focus({ preventScroll: true });
+      }
     };
     api.on("select", handler);
     return () => { api.off("select", handler); };
   }, [api]);
 
-  // Keyboard arrow navigation
+  const goPrev = () => { userInteracted.current = true; api?.scrollPrev(); };
+  const goNext = () => { userInteracted.current = true; api?.scrollNext(); };
+  const goTo = (i: number) => { userInteracted.current = true; api?.scrollTo(i); };
+
+  // Global keyboard arrow navigation
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-      if (e.key === "ArrowLeft") { e.preventDefault(); api?.scrollPrev(); }
-      else if (e.key === "ArrowRight") { e.preventDefault(); api?.scrollNext(); }
+      if (e.key === "ArrowLeft") { e.preventDefault(); goPrev(); }
+      else if (e.key === "ArrowRight") { e.preventDefault(); goNext(); }
+      else if (e.key === "Home") { e.preventDefault(); goTo(0); }
+      else if (e.key === "End") { e.preventDefault(); goTo(slides.length - 1); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [api]);
 
+  const activeName = slides[current]?.name ?? "";
+  const announcement = `Slide ${current + 1} of ${slides.length}: ${activeName}. Status ${vizProps.status}.`;
+
   return (
-    <div className="relative">
+    <div className="relative" role="region" aria-roledescription="carousel" aria-label="Financial visualizations">
       <Carousel setApi={setApi} opts={{ loop: true }}>
         <CarouselContent>
           {slides.map((s, i) => (
             <CarouselItem key={i}>
-              <div className="relative h-[360px] md:h-[440px] border border-border bg-card overflow-hidden">
+              <div
+                ref={(el) => { slideRefs.current[i] = el; }}
+                tabIndex={i === current ? 0 : -1}
+                role="group"
+                aria-roledescription="slide"
+                aria-label={`${i + 1} of ${slides.length}: ${s.name} — ${vizProps.status}`}
+                className="relative h-[360px] md:h-[440px] border border-border bg-card overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-foreground"
+              >
                 {s.node}
                 <div className="absolute top-3 left-4 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
                   {String(i + 1).padStart(2, "0")} · {s.name}
@@ -648,24 +669,31 @@ function VisualizationGallery(props: VizProps & { initialIndex: number; onChange
             </CarouselItem>
           ))}
         </CarouselContent>
-        <CarouselPrevious className="left-2 md:-left-12" />
-        <CarouselNext className="right-2 md:-right-12" />
+        <CarouselPrevious className="left-2 md:-left-12" onClick={goPrev} />
+        <CarouselNext className="right-2 md:-right-12" onClick={goNext} />
       </Carousel>
+
+      {/* Live region for screen readers */}
+      <div className="sr-only" aria-live="polite" aria-atomic="true">
+        {announcement}
+      </div>
 
       <div className="flex items-center justify-between mt-4 gap-4">
         <button
-          onClick={() => api?.scrollPrev()}
-          aria-label="Previous"
+          onClick={goPrev}
+          aria-label="Previous slide"
           className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground transition-colors"
         >
           ← Prev
         </button>
-        <div className="flex items-center gap-1.5">
-          {slides.map((_, i) => (
+        <div className="flex items-center gap-1.5" role="tablist">
+          {slides.map((s, i) => (
             <button
               key={i}
-              aria-label={`Go to slide ${i + 1}`}
-              onClick={() => api?.scrollTo(i)}
+              role="tab"
+              aria-selected={i === current}
+              aria-label={`Go to slide ${i + 1}: ${s.name}`}
+              onClick={() => goTo(i)}
               className={`h-1.5 rounded-full transition-all ${
                 i === current ? "w-6 bg-foreground" : "w-1.5 bg-border hover:bg-muted-foreground"
               }`}
@@ -673,15 +701,15 @@ function VisualizationGallery(props: VizProps & { initialIndex: number; onChange
           ))}
         </div>
         <button
-          onClick={() => api?.scrollNext()}
-          aria-label="Next"
+          onClick={goNext}
+          aria-label="Next slide"
           className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground transition-colors"
         >
           Next →
         </button>
       </div>
       <p className="text-center mt-2 text-[10px] uppercase tracking-[0.2em] text-muted-foreground tabular">
-        {String(current + 1).padStart(2, "0")} / {String(slides.length).padStart(2, "0")} · {slides[current]?.name}
+        {String(current + 1).padStart(2, "0")} / {String(slides.length).padStart(2, "0")} · {activeName}
       </p>
     </div>
   );
