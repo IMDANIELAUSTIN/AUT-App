@@ -413,7 +413,15 @@ function Index() {
           <p className="font-display italic">
             "Money is the measure of effort exchanged for time."
           </p>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <ShareButton state={{
+              fiat, crypto, expenses, wageAmount, payFreq, timeUnit,
+              hoursPerUnit, effort, taxEnabled, tax, slide: currentSlide, surplusAsHours,
+            }} />
+            <ResetButton onReset={() => {
+              try { localStorage.removeItem(STORAGE_KEY); } catch {}
+              window.location.reload();
+            }} />
             <PdfPreviewButton
               data={{
                 fiat, crypto, expenses, wageAmount, payFreq, timeUnit,
