@@ -284,17 +284,39 @@ function Index() {
           </div>
         </section>
 
+        {/* Comparison chart */}
+        <section className="border-b border-border py-10 md:py-14">
+          <div className="flex items-baseline justify-between mb-6">
+            <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
+              III. Income vs Expenses
+            </p>
+            <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground tabular">
+              monthly · {fiat}
+            </p>
+          </div>
+          <IncomeExpenseChart income={income} expenses={expenses} fiat={fiat} status={status} />
+        </section>
+
         {/* Footer */}
         <footer className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-t border-border pt-6 text-xs text-muted-foreground">
           <p className="font-display italic">
             "Money is the measure of effort exchanged for time."
           </p>
-          <a
-            href="#"
-            className="inline-flex items-center gap-2 border border-border px-3 py-1.5 hover:bg-foreground hover:text-background transition-colors"
-          >
-            <span className="tracking-[0.14em] uppercase text-[10px]">Support development</span>
-          </a>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() =>
+                exportPDF({
+                  fiat, crypto, expenses, wageAmount, payFreq, timeUnit,
+                  hoursPerUnit, effort, hourlyWage, monthlyHours,
+                  income, surplus, breakEvenHrs, ratio, status, cryptoEquivalent,
+                })
+              }
+              className="inline-flex items-center gap-2 border border-border px-3 py-1.5 hover:bg-foreground hover:text-background transition-colors"
+            >
+              <span className="tracking-[0.14em] uppercase text-[10px]">Export PDF</span>
+            </button>
+            <SupportButton />
+          </div>
         </footer>
       </div>
     </main>
