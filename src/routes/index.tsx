@@ -171,20 +171,9 @@ function readShareFromUrl(): Partial<typeof DEFAULTS> | null {
 
 // ---------- Component ----------
 function Index() {
-  const initial = loadState(STORAGE_KEY, {
-    fiat: "USD" as FiatCode,
-    crypto: "BTC" as CryptoCode,
-    expenses: 3200,
-    wageAmount: 1120,
-    payFreq: "weekly" as PayFreq,
-    timeUnit: "week" as TimeUnit,
-    hoursPerUnit: 40,
-    effort: 1,
-    taxEnabled: false,
-    tax: DEFAULT_TAX,
-    slide: 0,
-    surplusAsHours: false,
-  });
+  const persisted = loadState(STORAGE_KEY, DEFAULTS);
+  const shared = typeof window !== "undefined" ? readShareFromUrl() : null;
+  const initial = { ...persisted, ...(shared || {}) };
 
   const [fiat, setFiat] = useState<FiatCode>(initial.fiat);
   const [crypto, setCrypto] = useState<CryptoCode>(initial.crypto);
@@ -199,6 +188,17 @@ function Index() {
   const [initialSlide] = useState<number>(initial.slide);
   const [currentSlide, setCurrentSlide] = useState<number>(initial.slide);
   const [surplusAsHours, setSurplusAsHours] = useState<boolean>(initial.surplusAsHours);
+
+  // If we got state from URL, persist it then strip the param
+  useEffect(() => {
+    if (shared && typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("s");
+      window.history.replaceState({}, "", url.toString());
+      toast.success("Shared scenario loaded");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Reset hours when time unit changes (only after first render)
   const firstRun = useRef(true);
