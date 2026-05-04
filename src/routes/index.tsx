@@ -405,7 +405,7 @@ function Index() {
               monthly · {fiat === "NONE" ? "—" : fiat}
             </p>
           </div>
-          <IncomeExpenseChart income={income} expenses={expenses} fiat={fiat} status={status} />
+          <IncomeExpenseChart income={income} expenses={expenses} fiat={fiat} status={status} surplusAsHours={surplusAsHours} hourlyWage={netHourlyWage} />
         </section>
 
         {/* Footer */}
