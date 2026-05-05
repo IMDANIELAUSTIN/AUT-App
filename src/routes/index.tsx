@@ -23,17 +23,6 @@ import { Switch } from "@/components/openui/switch";
 import { Select as OpenUISelect, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/openui/select";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/openui/card";
 import { Separator } from "@/components/openui/separator";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  ReferenceLine,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import jsPDF from "jspdf";
 import { ChevronDown, Settings as SettingsIcon, Share2, Printer, Download, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
@@ -1157,14 +1146,24 @@ function IncomeExpenseChart({ income, expenses, fiat, status, graphsAsHours, hou
 
   const data = graphsAsHours
     ? [
-        { name: "Income", value: +toHours(income).toFixed(1), fill: STATUS_COLOR[status] },
-        { name: "Expenses", value: +toHours(expenses).toFixed(1), fill: "oklch(0.55 0.05 260)" },
+        { name: "Income", value: +toHours(income).toFixed(1) },
+        { name: "Expenses", value: +toHours(expenses).toFixed(1) },
       ]
     : [
-        { name: "Income", value: Math.round(income), fill: STATUS_COLOR[status] },
-        { name: "Expenses", value: Math.round(expenses), fill: "oklch(0.55 0.05 260)" },
+        { name: "Income", value: Math.round(income) },
+        { name: "Expenses", value: Math.round(expenses) },
       ];
-  const max = Math.max(data[0].value, data[1].value) * 1.15;
+  const max = Math.max(data[0].value, data[1].value, 1) * 1.15;
+  const width = 640;
+  const height = 280;
+  const pad = { top: 28, right: 30, bottom: 46, left: 86 };
+  const plotW = width - pad.left - pad.right;
+  const plotH = height - pad.top - pad.bottom;
+  const pointX = (index: number) => pad.left + index * plotW;
+  const pointY = (value: number) => pad.top + plotH - (value / max) * plotH;
+  const points = data.map((d, index) => ({ ...d, x: pointX(index), y: pointY(d.value) }));
+  const ticks = [0, max / 2, max];
+  const linePath = points.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`).join(" ");
 
   const refY = graphsAsHours ? toHours(expenses) : expenses;
   const refLabel = graphsAsHours
@@ -1178,41 +1177,43 @@ function IncomeExpenseChart({ income, expenses, fiat, status, graphsAsHours, hou
 
   return (
     <div className="w-full h-[280px] md:h-[340px]">
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} margin={{ top: 24, right: 16, left: 8, bottom: 8 }}>
-          <CartesianGrid strokeDasharray="2 4" stroke="var(--color-border)" vertical={false} />
-          <XAxis dataKey="name" stroke="var(--color-muted-foreground)" tick={{ fontSize: 11, letterSpacing: 1.5 }} axisLine={{ stroke: "var(--color-border)" }} tickLine={false} />
-          <YAxis
-            stroke="var(--color-muted-foreground)"
-            tick={{ fontSize: 11 }}
-            tickFormatter={(v) => graphsAsHours ? `${Math.round(Number(v))}h` : fmtFiat(Number(v), fiat)}
-            domain={[0, max]}
-            axisLine={false}
-            tickLine={false}
-            width={80}
-          />
-          <Tooltip
-            cursor={{ fill: "var(--color-muted)", opacity: 0.3 }}
-            contentStyle={{ background: "var(--color-background)", border: "1px solid var(--color-border)", borderRadius: 4, fontSize: 12 }}
-            formatter={(v: number) => fmt(v)}
-          />
-          <ReferenceLine
-            y={refY}
-            stroke="var(--color-muted-foreground)"
-            strokeDasharray="4 4"
-            label={{ value: refLabel, position: "insideTopRight", fill: "var(--color-muted-foreground)", fontSize: 10 }}
-          />
-          <ReferenceLine
-            y={surplusLabelY}
-            stroke={STATUS_COLOR[status]}
-            strokeDasharray="2 2"
-            label={{ value: surplusLabelText, position: "insideTopLeft", fill: STATUS_COLOR[status], fontSize: 10 }}
-          />
-          <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-            {data.map((d, i) => <Cell key={i} fill={d.fill} />)}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
+      <svg className="h-full w-full overflow-visible" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Income and expenses line graph">
+        <g className="font-mono">
+          {ticks.map((tick) => {
+            const y = pointY(tick);
+            return (
+              <g key={tick}>
+                <line x1={pad.left} x2={width - pad.right} y1={y} y2={y} stroke="var(--color-border)" strokeDasharray="2 4" />
+                <text x={pad.left - 12} y={y + 4} textAnchor="end" fontSize="11" fill="var(--color-muted-foreground)">
+                  {graphsAsHours ? `${Math.round(tick)}h` : fmtFiat(tick, fiat)}
+                </text>
+              </g>
+            );
+          })}
+          <line x1={pad.left} x2={width - pad.right} y1={pad.top + plotH} y2={pad.top + plotH} stroke="var(--color-border)" />
+          <line x1={pad.left} x2={pad.left} y1={pad.top} y2={pad.top + plotH} stroke="var(--color-border)" />
+          <line x1={pad.left} x2={width - pad.right} y1={pointY(refY)} y2={pointY(refY)} stroke="var(--color-muted-foreground)" strokeDasharray="4 4" />
+          <text x={width - pad.right} y={pointY(refY) - 8} textAnchor="end" fontSize="10" fill="var(--color-muted-foreground)">
+            {refLabel}
+          </text>
+          <line x1={pad.left} x2={width - pad.right} y1={pointY(surplusLabelY)} y2={pointY(surplusLabelY)} stroke={STATUS_COLOR[status]} strokeDasharray="2 2" />
+          <text x={pad.left} y={pointY(surplusLabelY) - 8} fontSize="10" fill={STATUS_COLOR[status]}>
+            {surplusLabelText}
+          </text>
+          <path d={linePath} fill="none" stroke={STATUS_COLOR[status]} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+          {points.map((point) => (
+            <g key={point.name}>
+              <circle cx={point.x} cy={point.y} r="7" fill="var(--color-background)" stroke={STATUS_COLOR[status]} strokeWidth="3" />
+              <text x={point.x} y={pad.top + plotH + 26} textAnchor="middle" fontSize="11" letterSpacing="1.5" fill="var(--color-muted-foreground)">
+                {point.name}
+              </text>
+              <text x={point.x} y={point.y - 14} textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--color-foreground)">
+                {fmt(point.value)}
+              </text>
+            </g>
+          ))}
+        </g>
+      </svg>
     </div>
   );
 }
@@ -1584,77 +1585,204 @@ type ExportData = {
   taxEnabled: boolean; taxRate: number;
 };
 
+function exportResultRows(d: ExportData) {
+  const sign = d.surplus >= 0 ? "+" : "-";
+  const rows = [
+    { label: "Effective hourly wage", value: fmtFiat(d.hourlyWage, d.fiat) },
+    { label: "Monthly hours worked", value: `${d.monthlyHours.toFixed(0)} hrs` },
+    { label: "Gross monthly income", value: fmtFiat(d.gross, d.fiat) },
+  ];
+  if (d.taxEnabled) {
+    rows.push({ label: "Net take-home income", value: fmtFiat(d.income, d.fiat) });
+  }
+  rows.push(
+    { label: "Monthly expenses", value: fmtFiat(d.expenses, d.fiat) },
+    { label: "Surplus / deficit", value: `${sign}${fmtFiat(Math.abs(d.surplus), d.fiat)}` },
+    { label: "Break-even hours / month", value: `${d.breakEvenHrs.toFixed(1)} hrs` },
+    { label: "Income / expense ratio", value: `${d.ratio.toFixed(2)}x` },
+  );
+  if (d.crypto !== "NONE") {
+    rows.push({
+      label: `Income in ${d.crypto}`,
+      value: `${d.cryptoEquivalent.toFixed(d.crypto === "USDC" ? 2 : 6)} ${d.crypto}`,
+    });
+  }
+  return rows;
+}
+
+function exportSubtitle(d: ExportData) {
+  const statusLabel = d.status === "sustainable" ? "Sustainable" : d.status === "thin" ? "Thin margin" : "Deficit";
+  const sign = d.surplus >= 0 ? "surplus" : "deficit";
+  return `${statusLabel} result with a ${fmtFiat(Math.abs(d.surplus), d.fiat)} monthly ${sign}. Generated ${new Date().toLocaleDateString()}.`;
+}
+
 function buildPDF(d: ExportData): jsPDF {
   const doc = new jsPDF({ unit: "pt", format: "letter" });
   const W = doc.internal.pageSize.getWidth();
-  const M = 56;
-  let y = 64;
-
-  doc.setFont("times", "italic"); doc.setFontSize(10); doc.setTextColor(120);
-  doc.text("AN INSTRUMENT FOR LABOR", M, y);
-  y += 22;
-  doc.setFont("times", "normal"); doc.setFontSize(24); doc.setTextColor(20);
-  doc.text("The Austin Equation", M, y);
-  y += 18;
-  doc.setFont("times", "italic"); doc.setFontSize(11); doc.setTextColor(110);
-  doc.text("M = E · T · C", M, y);
-
-  y += 28;
-  doc.setDrawColor(200); doc.line(M, y, W - M, y);
-  y += 22;
-  doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.setTextColor(80);
-  doc.text("STATUS", M, y);
-  doc.setFont("times", "normal"); doc.setFontSize(20); doc.setTextColor(20);
-  doc.text(d.status.toUpperCase(), M + 80, y + 2);
-  y += 14;
-  doc.setFont("helvetica", "normal"); doc.setFontSize(11); doc.setTextColor(80);
+  const H = doc.internal.pageSize.getHeight();
+  const M = 64;
+  let y = 76;
   const sign = d.surplus >= 0 ? "+" : "-";
-  doc.text(`${sign}${fmtFiat(Math.abs(d.surplus), d.fiat)} per month`, M + 80, y + 14);
-  y += 36;
+  const statusLabel = d.status === "sustainable" ? "SUSTAINABLE" : d.status === "thin" ? "THIN MARGIN" : "DEFICIT";
 
-  const section = (title: string) => {
-    y += 10;
-    doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.setTextColor(80);
-    doc.text(title.toUpperCase(), M, y);
-    y += 6;
-    doc.setDrawColor(220); doc.line(M, y, W - M, y);
-    y += 16;
-  };
+  doc.setFillColor(250, 250, 249);
+  doc.rect(0, 0, W, H, "F");
+  doc.setDrawColor(218, 218, 216);
+  doc.setLineWidth(1);
+  doc.roundedRect(M - 18, M - 18, W - M * 2 + 36, H - M * 2 + 36, 10, 10, "S");
+
+  doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.setTextColor(110);
+  doc.text("THE AUSTIN EQUATION", M, y);
+  y += 30;
+  doc.setFont("times", "normal"); doc.setFontSize(30); doc.setTextColor(24);
+  doc.text("Results Summary", M, y);
+  y += 22;
+  doc.setFont("helvetica", "normal"); doc.setFontSize(11); doc.setTextColor(92);
+  doc.text(doc.splitTextToSize(exportSubtitle(d), W - M * 2), M, y);
+  y += 44;
+
+  doc.setFillColor(255, 255, 255);
+  doc.roundedRect(M, y, W - M * 2, 92, 8, 8, "F");
+  doc.setDrawColor(224, 224, 222);
+  doc.roundedRect(M, y, W - M * 2, 92, 8, 8, "S");
+  doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.setTextColor(112);
+  doc.text("CURRENT RESULT", M + 18, y + 24);
+  doc.setFont("times", "normal"); doc.setFontSize(24); doc.setTextColor(24);
+  doc.text(statusLabel, M + 18, y + 56);
+  doc.setFont("helvetica", "bold"); doc.setFontSize(18);
+  doc.text(`${sign}${fmtFiat(Math.abs(d.surplus), d.fiat)}`, W - M - 18, y + 54, { align: "right" });
+  doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(112);
+  doc.text("per month", W - M - 18, y + 70, { align: "right" });
+  y += 126;
+
   const row = (label: string, value: string) => {
-    doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(110);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(96);
     doc.text(label, M, y);
-    doc.setFont("times", "normal"); doc.setFontSize(12); doc.setTextColor(20);
+    doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.setTextColor(26);
     doc.text(value, W - M, y, { align: "right" });
-    y += 20;
+    y += 18;
+    doc.setDrawColor(230, 230, 228);
+    doc.line(M, y - 8, W - M, y - 8);
+    y += 8;
   };
 
-  section("I. Inputs");
-  row("Fiat denomination", d.fiat);
-  if (d.crypto !== "NONE") row("Crypto denomination", d.crypto);
-  row("Monthly expenses (M)", fmtFiat(d.expenses, d.fiat));
-  row("Wage / pay (C)", `${fmtFiat(d.wageAmount, d.fiat)} / ${d.payFreq}`);
-  row("Time scale", d.timeUnit);
-  row(`Work hours / ${d.timeUnit} (T)`, `${d.hoursPerUnit} hrs`);
-  row("Effort multiplier (E)", `${d.effort.toFixed(2)}`);
-  if (d.taxEnabled) row("Estimated tax rate", `${(d.taxRate * 100).toFixed(2)}%`);
-
-  section("II. The Wage Gap");
-  row("Effective hourly wage", fmtFiat(d.hourlyWage, d.fiat));
-  row("Monthly hours worked", `${d.monthlyHours.toFixed(0)} hrs`);
-  row("Gross monthly income", fmtFiat(d.gross, d.fiat));
-  if (d.taxEnabled) row("Net (take-home) income", fmtFiat(d.income, d.fiat));
-  row("Surplus / deficit", `${sign}${fmtFiat(Math.abs(d.surplus), d.fiat)}`);
-  row("Break-even hours / mo.", `${d.breakEvenHrs.toFixed(1)} hrs`);
-  row("Income / expense ratio", `${d.ratio.toFixed(2)}x`);
-  if (d.crypto !== "NONE") {
-    row(`Income in ${d.crypto}`, `${d.cryptoEquivalent.toFixed(d.crypto === "USDC" ? 2 : 6)} ${d.crypto}`);
-  }
+  exportResultRows(d).forEach(({ label, value }) => row(label, value));
 
   doc.setFont("times", "italic"); doc.setFontSize(9); doc.setTextColor(140);
-  doc.text(`"Money is the measure of effort exchanged for time."`, M, doc.internal.pageSize.getHeight() - 40);
-  doc.text(new Date().toLocaleDateString(), W - M, doc.internal.pageSize.getHeight() - 40, { align: "right" });
+  doc.text(`"Money is the measure of effort exchanged for time."`, M, H - 42);
+  doc.text("M = E x T x C", W - M, H - 42, { align: "right" });
 
   return doc;
+}
+
+function downloadResultsImage(d: ExportData) {
+  const scale = 2;
+  const width = 1200;
+  const height = 1600;
+  const canvas = document.createElement("canvas");
+  canvas.width = width * scale;
+  canvas.height = height * scale;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  ctx.scale(scale, scale);
+  ctx.fillStyle = "#fafaf9";
+  ctx.fillRect(0, 0, width, height);
+  ctx.strokeStyle = "#dededb";
+  ctx.lineWidth = 2;
+  roundRect(ctx, 78, 78, width - 156, height - 156, 20);
+  ctx.stroke();
+
+  let y = 150;
+  ctx.fillStyle = "#6f6f6c";
+  ctx.font = "700 18px Arial, sans-serif";
+  ctx.fillText("THE AUSTIN EQUATION", 128, y);
+  y += 72;
+  ctx.fillStyle = "#181818";
+  ctx.font = "52px Georgia, serif";
+  ctx.fillText("Results Summary", 128, y);
+  y += 42;
+  ctx.fillStyle = "#5f5f5c";
+  ctx.font = "24px Arial, sans-serif";
+  wrapCanvasText(ctx, exportSubtitle(d), 128, y, width - 256, 34);
+  y += 112;
+
+  const sign = d.surplus >= 0 ? "+" : "-";
+  const statusLabel = d.status === "sustainable" ? "SUSTAINABLE" : d.status === "thin" ? "THIN MARGIN" : "DEFICIT";
+  ctx.fillStyle = "#ffffff";
+  roundRect(ctx, 128, y, width - 256, 170, 18);
+  ctx.fill();
+  ctx.strokeStyle = "#e2e2df";
+  ctx.stroke();
+  ctx.fillStyle = "#70706d";
+  ctx.font = "700 18px Arial, sans-serif";
+  ctx.fillText("CURRENT RESULT", 168, y + 48);
+  ctx.fillStyle = "#181818";
+  ctx.font = "44px Georgia, serif";
+  ctx.fillText(statusLabel, 168, y + 108);
+  ctx.font = "700 36px Arial, sans-serif";
+  ctx.textAlign = "right";
+  ctx.fillText(`${sign}${fmtFiat(Math.abs(d.surplus), d.fiat)}`, width - 168, y + 104);
+  ctx.font = "20px Arial, sans-serif";
+  ctx.fillStyle = "#70706d";
+  ctx.fillText("per month", width - 168, y + 136);
+  ctx.textAlign = "left";
+  y += 240;
+
+  exportResultRows(d).forEach(({ label, value }) => {
+    ctx.fillStyle = "#666663";
+    ctx.font = "24px Arial, sans-serif";
+    ctx.fillText(label, 128, y);
+    ctx.fillStyle = "#191919";
+    ctx.font = "700 25px Arial, sans-serif";
+    ctx.textAlign = "right";
+    ctx.fillText(value, width - 128, y);
+    ctx.textAlign = "left";
+    ctx.strokeStyle = "#e8e8e5";
+    ctx.beginPath();
+    ctx.moveTo(128, y + 22);
+    ctx.lineTo(width - 128, y + 22);
+    ctx.stroke();
+    y += 58;
+  });
+
+  ctx.fillStyle = "#858581";
+  ctx.font = "italic 22px Georgia, serif";
+  ctx.fillText('"Money is the measure of effort exchanged for time."', 128, height - 128);
+  ctx.font = "20px Arial, sans-serif";
+  ctx.textAlign = "right";
+  ctx.fillText("M = E x T x C", width - 128, height - 128);
+
+  const link = document.createElement("a");
+  link.href = canvas.toDataURL("image/jpeg", 0.94);
+  link.download = `austin-equation-results-${new Date().toISOString().slice(0, 10)}.jpg`;
+  link.click();
+  toast.success("Image downloaded");
+}
+
+function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function wrapCanvasText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number, lineHeight: number) {
+  const words = text.split(" ");
+  let line = "";
+  for (const word of words) {
+    const testLine = line ? `${line} ${word}` : word;
+    if (ctx.measureText(testLine).width > maxWidth && line) {
+      ctx.fillText(line, x, y);
+      line = word;
+      y += lineHeight;
+    } else {
+      line = testLine;
+    }
+  }
+  if (line) ctx.fillText(line, x, y);
 }
 
 function PdfPreviewButton({ data }: { data: ExportData }) {
@@ -1671,13 +1799,14 @@ function PdfPreviewButton({ data }: { data: ExportData }) {
       try { URL.revokeObjectURL(blobUrl.toString()); } catch {}
       setUrl(null);
     };
-  }, [open]);
+  }, [open, data]);
 
   const download = () => {
     const doc = buildPDF(data);
     doc.save(`austin-equation-${new Date().toISOString().slice(0, 10)}.pdf`);
     toast.success("PDF downloaded");
   };
+  const downloadImage = () => downloadResultsImage(data);
 
   const print = () => {
     const doc = buildPDF(data);
@@ -1699,8 +1828,8 @@ function PdfPreviewButton({ data }: { data: ExportData }) {
       </DialogTrigger>
       <DialogContent className="max-w-4xl w-[95vw] h-[88vh] flex flex-col p-4 sm:p-6">
         <DialogHeader>
-          <DialogTitle>PDF Summary Preview</DialogTitle>
-          <DialogDescription>Review the document before downloading or printing.</DialogDescription>
+          <DialogTitle>Results PDF Preview</DialogTitle>
+          <DialogDescription>Preview, print, or download a clean summary of the Results section.</DialogDescription>
         </DialogHeader>
         <div className="flex-1 min-h-0 border border-border bg-muted">
           {url ? (
@@ -1718,6 +1847,9 @@ function PdfPreviewButton({ data }: { data: ExportData }) {
           </Button>
           <Button onClick={download}>
             <Download className="h-4 w-4" /> Download PDF
+          </Button>
+          <Button onClick={downloadImage}>
+            <Download className="h-4 w-4" /> Download Image
           </Button>
         </DialogFooter>
       </DialogContent>
