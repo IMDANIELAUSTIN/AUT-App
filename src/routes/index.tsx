@@ -96,7 +96,7 @@ type TaxConfig = {
 const DEFAULT_TAX: TaxConfig = { federal: 12, state: 5, fica: 7.65, other: 0 };
 
 // ---------- Persistence ----------
-const STORAGE_KEY = "austin-equation:v2";
+const STORAGE_KEY = "austin-equation:v3";
 
 type ExpenseKey =
   | "rent"
@@ -131,7 +131,7 @@ const DEFAULT_EXPENSE_ITEMS: ExpenseItems = {
 
 const DEFAULTS = {
   fiat: "USD" as FiatCode,
-  crypto: "BTC" as CryptoCode,
+  crypto: "NONE" as CryptoCode,
   expenses: 3200,
   expenseItems: DEFAULT_EXPENSE_ITEMS,
   wageAmount: 1120,
@@ -139,7 +139,7 @@ const DEFAULTS = {
   timeUnit: "week" as TimeUnit,
   hoursPerUnit: 40,
   effort: 1,
-  taxEnabled: false,
+  taxEnabled: true,
   tax: DEFAULT_TAX,
   slide: 0,
   surplusAsHours: false,
@@ -817,7 +817,6 @@ function VisualizationGallery(props: VizProps & { initialIndex: number; onChange
   const [api, setApi] = useState<CarouselApi>();
   const [current, setCurrent] = useState(initialSlideIndex);
   const slideRefs = useRef<Array<HTMLDivElement | null>>([]);
-  const userInteracted = useRef(false);
 
   useEffect(() => {
     if (!api) return;
@@ -827,18 +826,14 @@ function VisualizationGallery(props: VizProps & { initialIndex: number; onChange
       const i = api.selectedScrollSnap();
       setCurrent(i);
       onChange(i);
-      // Move focus to active slide on user-driven change
-      if (userInteracted.current) {
-        slideRefs.current[i]?.focus({ preventScroll: true });
-      }
     };
     api.on("select", handler);
     return () => { api.off("select", handler); };
   }, [api, initialSlideIndex, onChange]);
 
-  const goPrev = () => { userInteracted.current = true; api?.scrollPrev(); };
-  const goNext = () => { userInteracted.current = true; api?.scrollNext(); };
-  const goTo = (i: number) => { userInteracted.current = true; api?.scrollTo(i); };
+  const goPrev = () => { api?.scrollPrev(); };
+  const goNext = () => { api?.scrollNext(); };
+  const goTo = (i: number) => { api?.scrollTo(i); };
 
   // Global keyboard arrow navigation
   useEffect(() => {
@@ -859,7 +854,7 @@ function VisualizationGallery(props: VizProps & { initialIndex: number; onChange
 
   return (
     <div className="relative" role="region" aria-roledescription="carousel" aria-label="Financial visualizations">
-      <Carousel setApi={setApi} opts={{ loop: true }}>
+      <Carousel setApi={setApi} opts={{ loop: false, align: "start", containScroll: "trimSnaps", duration: 24 }}>
         <CarouselContent>
           {slides.map((s, i) => (
             <CarouselItem key={i}>
@@ -972,7 +967,7 @@ function DigitalTimerWatchViz({ status, ratio, surplus, fiat, hourlyWage, visual
         { label: "MIN", value: duration.minutes },
         { label: "SEC", value: duration.seconds },
       ].map((part) => (
-	        <div key={part.label} className="flex min-w-0 flex-col items-center justify-end px-2 py-3 md:px-4 md:py-5">
+		        <div key={part.label} className="flex min-w-0 flex-col items-center justify-end px-3 py-5 md:px-5 md:py-7">
 	          <p
 	            className="font-mono font-bold leading-none tracking-normal tabular-nums"
 	            style={{ color: "oklch(0.22 0.02 250)", fontSize: "clamp(1.85rem, 8vw, 6.4rem)" }}
@@ -989,7 +984,7 @@ function DigitalTimerWatchViz({ status, ratio, surplus, fiat, hourlyWage, visual
       ))}
     </div>
   ) : (
-	    <div className="flex min-h-[150px] flex-col items-center justify-center px-6 py-9 text-center md:min-h-[190px] md:px-10 md:py-10">
+		    <div className="flex min-h-[150px] flex-col items-center justify-center px-8 py-12 text-center md:min-h-[190px] md:px-14 md:py-14">
       <p className="mb-4 font-mono text-[10px] font-bold uppercase tracking-[0.22em]" style={{ color: "oklch(0.45 0.02 250)" }}>
         {label}
       </p>
@@ -1008,14 +1003,13 @@ function DigitalTimerWatchViz({ status, ratio, surplus, fiat, hourlyWage, visual
       style={{ backgroundColor: "oklch(0.98 0 0)", color: "oklch(0.24 0.02 240)" }}
     >
 	      <div
-	        className="relative z-10 w-full max-w-[900px] rounded-[1.8rem] p-5 sm:p-6"
-	        style={{
-	          backgroundColor: "oklch(0.96 0 0)",
-	          boxShadow: "0 28px 55px rgba(15,23,42,0.18)",
-	        }}
-	      >
-	        <div
-	          className="rounded-xl px-6 py-7 shadow-inner md:px-10 md:py-8"
+		        className="relative z-10 w-full max-w-[900px] rounded-[1.8rem] p-6 sm:p-8 md:p-10"
+		        style={{
+		          backgroundColor: "oklch(0.96 0 0)",
+		        }}
+		      >
+		        <div
+		          className="rounded-xl px-8 py-10 shadow-inner md:px-14 md:py-12"
 	          style={{ backgroundColor: "oklch(0.93 0.004 250)" }}
 	        >
           {displayContent}
