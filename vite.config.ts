@@ -9,5 +9,5 @@ export default defineConfig({
     tailwindcss(),
     tsconfigPaths(),
   ],
-  base: './', // Makes it locally hostable by using relative paths
+  base: '/AUT-App', // Makes it locally hostable by using relative paths
 });
