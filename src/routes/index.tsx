@@ -292,7 +292,7 @@ export default function Index() {
           <div>
             <h1 className="text-3xl md:text-4xl font-bold tracking-tight">The Austin Equation</h1>
             <p className="text-muted-foreground mt-1">
-              An instrument for labor
+              Find What's Missing
             </p>
           </div>
           <p className="hidden md:block text-muted-foreground tabular-nums font-mono text-sm">
@@ -1520,9 +1520,10 @@ function QrCode({ label, value }: { label: string; value: string }) {
 function SupportButton() {
   const [copied, setCopied] = useState<string | null>(null);
   const addresses = [
-    { label: "BTC", value: "bc1qexamplebitcoinaddressreplaceme0000000" },
-    { label: "ETH", value: "0xExampleEthereumAddressReplaceMe000000000" },
-    { label: "SOL", value: "ExampleSolanaAddressReplaceMe00000000000" },
+    { label: "BTC", value: "bc1q5f6kzxspp44czej5rz044s4854awgvty6p0yfk" },
+    { label: "ETH", value: "0x01DFD17138192C78a6C878f04fB3C1A7fF94FC60" },
+    { label: "SOL", value: "DLxrbjPrSDRuo2a8B3P2RUALtSjdT3Cs6kLuWsCUrxzU" },
+    { label: "PYUSD", value: "0xf9BF6a611F792207aB821eFF0E1E3e6db21660a5" },
   ];
   const copy = async (label: string, value: string) => {
     try {
@@ -1534,7 +1535,11 @@ function SupportButton() {
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-2 border-pink-300/80 bg-pink-50 text-pink-700 shadow-sm shadow-pink-200/50 hover:border-pink-400 hover:bg-pink-100 hover:text-pink-800 dark:border-pink-400/40 dark:bg-pink-500/10 dark:text-pink-200 dark:shadow-none dark:hover:bg-pink-500/20"
+        >
           <span>♡ Support</span>
         </Button>
       </DialogTrigger>
