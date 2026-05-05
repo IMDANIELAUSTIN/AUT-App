@@ -6,7 +6,7 @@ import {
   CarouselItem,
   CarouselNext,
   CarouselPrevious,
-} from "@/components/ui/carousel";
+} from "@/components/openui/carousel";
 import {
   Dialog,
   DialogContent,
@@ -15,14 +15,14 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import { Select as ShadcnSelect, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
+} from "@/components/openui/dialog";
+import { Button } from "@/components/openui/button";
+import { Input } from "@/components/openui/input";
+import { Label } from "@/components/openui/label";
+import { Switch } from "@/components/openui/switch";
+import { Select as OpenUISelect, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/openui/select";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/openui/card";
+import { Separator } from "@/components/openui/separator";
 import {
   Bar,
   BarChart,
@@ -626,7 +626,7 @@ function SelectField({ label, value, onChange, options }: {
   return (
     <div className="flex flex-col gap-2">
       <Label className="text-muted-foreground">{label}</Label>
-      <ShadcnSelect value={value} onValueChange={onChange}>
+      <OpenUISelect value={value} onValueChange={onChange}>
         <SelectTrigger className="w-full capitalize tabular-nums font-medium">
           <SelectValue placeholder="Select..." />
         </SelectTrigger>
@@ -637,7 +637,7 @@ function SelectField({ label, value, onChange, options }: {
             </SelectItem>
           ))}
         </SelectContent>
-      </ShadcnSelect>
+      </OpenUISelect>
     </div>
   );
 }
