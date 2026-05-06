@@ -1650,8 +1650,26 @@ function QrCode({ label, value }: { label: string; value: string }) {
 }
 
 // ---------- Support button ----------
+type SupportPaymentMethod = {
+  label: string;
+  initials: string;
+  hint: string;
+  href?: string;
+  copyValue?: string;
+  accent: string;
+};
+
 function SupportButton() {
   const [copied, setCopied] = useState<string | null>(null);
+  const paymentMethods: SupportPaymentMethod[] = [
+    // Add live payment links or copy values here when each method is ready.
+    { label: "Apple Pay", initials: "AP", hint: "Add link", href: "", accent: "linear-gradient(145deg, #111827, #374151)" },
+    { label: "Google Pay", initials: "G", hint: "Add link", href: "", accent: "linear-gradient(145deg, #2563eb, #16a34a)" },
+    { label: "PayPal", initials: "PP", hint: "Add link", href: "", accent: "linear-gradient(145deg, #003087, #009cde)" },
+    { label: "Venmo", initials: "V", hint: "Add link", href: "", accent: "linear-gradient(145deg, #008cff, #006aff)" },
+    { label: "Cash App", initials: "$", hint: "Add link", href: "", accent: "linear-gradient(145deg, #00d632, #00a526)" },
+    { label: "Coinbase", initials: "CB", hint: "Add link", href: "", accent: "linear-gradient(145deg, #1652f0, #0a46e4)" },
+  ];
   const addresses = [
     { label: "BTC", value: "bc1q5f6kzxspp44czej5rz044s4854awgvty6p0yfk" },
     { label: "ETH", value: "0x01DFD17138192C78a6C878f04fB3C1A7fF94FC60" },
@@ -1665,6 +1683,15 @@ function SupportButton() {
       setTimeout(() => setCopied(null), 1500);
     } catch {
       // Clipboard access can be denied by browser permissions.
+    }
+  };
+  const activatePaymentMethod = async (method: SupportPaymentMethod) => {
+    if (method.href) {
+      window.open(method.href, "_blank", "noopener,noreferrer");
+      return;
+    }
+    if (method.copyValue) {
+      await copy(method.label, method.copyValue);
     }
   };
   return (
@@ -1685,20 +1712,51 @@ function SupportButton() {
             The Austin Equation is independent and ad-free. If it's useful to you, a small tip keeps it that way.
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-3 py-2">
-          {addresses.map((a) => (
-            <button key={a.label} onClick={() => copy(a.label, a.value)}
-              className="w-full text-left flex items-center gap-3 border border-border px-3 py-3 hover:bg-muted transition-colors">
-              <QrCode label={a.label} value={a.value} />
-              <div className="min-w-0 flex-1">
-                <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">{a.label}</p>
-                <p className="tabular text-xs break-all">{a.value}</p>
-              </div>
-              <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground shrink-0">
-                {copied === a.label ? "copied ✓" : "copy"}
-              </span>
-            </button>
-          ))}
+        <div className="space-y-4 py-2" style={{ maxHeight: "min(68vh, 620px)", overflowY: "auto" }}>
+          <section className="space-y-3">
+            <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Payment apps</p>
+            <div className="ae-support-payment-grid">
+              {paymentMethods.map((method) => {
+                const enabled = !!method.href || !!method.copyValue;
+                return (
+                  <button
+                    key={method.label}
+                    type="button"
+                    disabled={!enabled}
+                    onClick={() => activatePaymentMethod(method)}
+                    className="ae-support-payment-card"
+                  >
+                    <span className="ae-support-payment-icon" style={{ background: method.accent }}>
+                      {method.initials}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="ae-support-payment-label">{method.label}</span>
+                      <span className="ae-support-payment-hint">
+                        {enabled ? copied === method.label ? "copied" : "open" : method.hint}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          <section className="space-y-3">
+            <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Crypto addresses</p>
+            {addresses.map((a) => (
+              <button key={a.label} onClick={() => copy(a.label, a.value)}
+                className="w-full text-left flex items-center gap-3 border border-border px-3 py-3 hover:bg-muted transition-colors">
+                <QrCode label={a.label} value={a.value} />
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">{a.label}</p>
+                  <p className="tabular text-xs break-all">{a.value}</p>
+                </div>
+                <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground shrink-0">
+                  {copied === a.label ? "copied ✓" : "copy"}
+                </span>
+              </button>
+            ))}
+          </section>
         </div>
         <DialogFooter>
           <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Thank you.</p>
