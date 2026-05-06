@@ -1684,20 +1684,25 @@ type SupportPaymentMethod = {
   initials: string;
   hint: string;
   href?: string;
+  mobileHref?: string;
   copyValue?: string;
   accent: string;
+};
+
+const isLikelyMobile = () => {
+  if (typeof navigator === "undefined") return false;
+  return /android|iphone|ipad|ipod/i.test(navigator.userAgent);
 };
 
 function SupportButton() {
   const [copied, setCopied] = useState<string | null>(null);
   const paymentMethods: SupportPaymentMethod[] = [
-    // Add live payment links or copy values here when each method is ready.
-    { label: "Apple Pay", initials: "AP", hint: "Add link", href: "", accent: "linear-gradient(145deg, #111827, #374151)" },
-    { label: "Google Pay", initials: "G", hint: "Add link", href: "", accent: "linear-gradient(145deg, #2563eb, #16a34a)" },
-    { label: "PayPal", initials: "PP", hint: "Add link", href: "", accent: "linear-gradient(145deg, #003087, #009cde)" },
-    { label: "Venmo", initials: "V", hint: "Add link", href: "", accent: "linear-gradient(145deg, #008cff, #006aff)" },
-    { label: "Cash App", initials: "$", hint: "Add link", href: "", accent: "linear-gradient(145deg, #00d632, #00a526)" },
-    { label: "Coinbase", initials: "CB", hint: "Add link", href: "", accent: "linear-gradient(145deg, #1652f0, #0a46e4)" },
+    { label: "Apple Pay", initials: "AP", hint: "learn more", href: "https://www.apple.com/apple-cash/", accent: "linear-gradient(145deg, #111827, #374151)" },
+    { label: "Google Pay", initials: "G", hint: "open pay", href: "https://pay.google.com/", mobileHref: "https://pay.google.com/", accent: "linear-gradient(145deg, #2563eb, #16a34a)" },
+    { label: "PayPal", initials: "PP", hint: "open", href: "https://www.paypal.com/paypalme/imdanielaustin", mobileHref: "https://www.paypal.com/paypalme/imdanielaustin", accent: "linear-gradient(145deg, #003087, #009cde)" },
+    { label: "Venmo", initials: "V", hint: "open", href: "https://venmo.com/u/imdanielaustin", mobileHref: "venmo://paycharge?txn=pay&recipients=imdanielaustin", accent: "linear-gradient(145deg, #008cff, #006aff)" },
+    { label: "Cash App", initials: "$", hint: "open", href: "https://cash.app/$imdanielaustin", mobileHref: "https://cash.app/$imdanielaustin", accent: "linear-gradient(145deg, #00d632, #00a526)" },
+    { label: "Coinbase", initials: "CB", hint: "open app", href: "https://www.coinbase.com/", mobileHref: "coinbase://", accent: "linear-gradient(145deg, #1652f0, #0a46e4)" },
   ];
   const addresses = [
     { label: "BTC", value: "bc1q5f6kzxspp44czej5rz044s4854awgvty6p0yfk" },
@@ -1715,8 +1720,9 @@ function SupportButton() {
     }
   };
   const activatePaymentMethod = async (method: SupportPaymentMethod) => {
-    if (method.href) {
-      window.open(method.href, "_blank", "noopener,noreferrer");
+    const target = isLikelyMobile() && method.mobileHref ? method.mobileHref : method.href;
+    if (target) {
+      window.open(target, "_blank", "noopener,noreferrer");
       return;
     }
     if (method.copyValue) {
@@ -1734,14 +1740,14 @@ function SupportButton() {
           <span>♡ Support</span>
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="ae-support-dialog sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Support development</DialogTitle>
-          <DialogDescription>
-            The Austin Equation is independent and ad-free. If it's useful to you, a small tip keeps it that way.
+          <DialogDescription className="max-w-prose text-sm leading-relaxed">
+            Choose a payment app, or copy a crypto address. On mobile, supported buttons open the matching app when your device allows it.
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-4 py-2" style={{ maxHeight: "min(68vh, 620px)", overflowY: "auto" }}>
+        <div className="space-y-4 py-2 pr-1" style={{ maxHeight: "min(62svh, 620px)", overflowY: "auto" }}>
           <section className="space-y-3">
             <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Payment apps</p>
             <div className="ae-support-payment-grid">
