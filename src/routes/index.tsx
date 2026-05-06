@@ -1,4 +1,12 @@
-import { type PointerEvent as ReactPointerEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Carousel,
+  CarouselApi,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+} from "@/components/openui/carousel";
 import {
   Dialog,
   DialogContent,
@@ -806,55 +814,25 @@ function VisualizationGallery(props: VizProps & { initialIndex: number; onChange
     { name: "Crypto", node: <CryptoIncomeViz {...vizProps} /> },
   ];
   const initialSlideIndex = Math.min(Math.max(initialIndex, 0), slides.length - 1);
+  const [api, setApi] = useState<CarouselApi>();
   const [current, setCurrent] = useState(initialSlideIndex);
-  const [dragOffset, setDragOffset] = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
-  const dragRef = useRef({ active: false, pointerId: 0, startX: 0, width: 1 });
 
-  const goTo = (i: number) => {
-    const next = Math.min(Math.max(i, 0), slides.length - 1);
-    setCurrent(next);
-    onChange(next);
-    setDragOffset(0);
-  };
-  const goPrev = () => goTo(current - 1);
-  const goNext = () => goTo(current + 1);
-
-  const finishDrag = (dx = dragOffset) => {
-    const threshold = Math.min(110, dragRef.current.width * 0.18);
-    dragRef.current.active = false;
-    setIsDragging(false);
-    if (dx <= -threshold) goTo(current + 1);
-    else if (dx >= threshold) goTo(current - 1);
-    else setDragOffset(0);
-  };
-
-  const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
-    if (e.button !== 0) return;
-    dragRef.current = {
-      active: true,
-      pointerId: e.pointerId,
-      startX: e.clientX,
-      width: e.currentTarget.getBoundingClientRect().width || 1,
+  useEffect(() => {
+    if (!api) return;
+    if (initialSlideIndex > 0) api.scrollTo(initialSlideIndex, true);
+    setCurrent(api.selectedScrollSnap());
+    const handler = () => {
+      const i = api.selectedScrollSnap();
+      setCurrent(i);
+      onChange(i);
     };
-    e.currentTarget.setPointerCapture(e.pointerId);
-    setIsDragging(true);
-  };
+    api.on("select", handler);
+    return () => { api.off("select", handler); };
+  }, [api, initialSlideIndex, onChange]);
 
-  const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
-    if (!dragRef.current.active || dragRef.current.pointerId !== e.pointerId) return;
-    let dx = e.clientX - dragRef.current.startX;
-    if ((current === 0 && dx > 0) || (current === slides.length - 1 && dx < 0)) dx *= 0.28;
-    setDragOffset(dx);
-  };
-
-  const onPointerUp = (e: ReactPointerEvent<HTMLDivElement>) => {
-    if (!dragRef.current.active || dragRef.current.pointerId !== e.pointerId) return;
-    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch {}
-    finishDrag(e.clientX - dragRef.current.startX);
-  };
-
-  const onPointerCancel = () => finishDrag(0);
+  const goPrev = () => { api?.scrollPrev(); };
+  const goNext = () => { api?.scrollNext(); };
+  const goTo = (i: number) => { api?.scrollTo(i); };
 
   // Global keyboard arrow navigation
   useEffect(() => {
@@ -868,46 +846,35 @@ function VisualizationGallery(props: VizProps & { initialIndex: number; onChange
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [current]);
+  }, [api]);
 
   const activeName = slides[current]?.name ?? "";
   const announcement = `Slide ${current + 1} of ${slides.length}: ${activeName}. Status ${vizProps.status}.`;
 
   return (
     <div className="relative" role="region" aria-roledescription="carousel" aria-label="Financial visualizations">
-      <div
-        className={`overflow-hidden border border-border bg-card select-none ${isDragging ? "cursor-grabbing" : "cursor-grab"}`}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerCancel}
-        style={{ touchAction: "pan-y" }}
-      >
-        <div
-          className="flex will-change-transform"
-          style={{
-            transform: `translate3d(calc(${-current * 100}% + ${dragOffset}px), 0, 0)`,
-            transition: isDragging ? "none" : "transform 320ms cubic-bezier(0.22, 1, 0.36, 1)",
-          }}
-        >
+      <Carousel setApi={setApi} opts={{ loop: false, align: "start", containScroll: "trimSnaps", duration: 24 }}>
+        <CarouselContent>
           {slides.map((s, i) => (
-            <div key={i} className="min-w-full">
+            <CarouselItem key={i}>
               <div
                 tabIndex={i === current ? 0 : -1}
                 role="group"
                 aria-roledescription="slide"
                 aria-label={`${i + 1} of ${slides.length}: ${s.name} — ${vizProps.status}`}
-                className="relative h-[360px] md:h-[440px] overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-foreground"
+                className="relative h-[360px] md:h-[440px] border border-border bg-card overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-foreground"
               >
                 {s.node}
                 <div className="absolute top-3 left-4 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
                   {s.name}
                 </div>
               </div>
-            </div>
+            </CarouselItem>
           ))}
-        </div>
-      </div>
+        </CarouselContent>
+        <CarouselPrevious className="hidden md:inline-flex md:-left-12" onClick={goPrev} />
+        <CarouselNext className="hidden md:inline-flex md:-right-12" onClick={goNext} />
+      </Carousel>
 
       {/* Live region for screen readers */}
       <div className="sr-only" aria-live="polite" aria-atomic="true">
@@ -929,6 +896,7 @@ function VisualizationGallery(props: VizProps & { initialIndex: number; onChange
               key={i}
               role="tab"
               aria-selected={i === current}
+              aria-current={i === current ? "true" : undefined}
               aria-label={`Go to slide ${i + 1}: ${s.name}`}
               onClick={() => goTo(i)}
               className={`h-1.5 rounded-full transition-all ${
@@ -946,9 +914,6 @@ function VisualizationGallery(props: VizProps & { initialIndex: number; onChange
 	          Next →
 	        </button>
 	      </div>
-	      <p className="text-center mt-2 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-	        {activeName}
-	      </p>
     </div>
   );
 }
