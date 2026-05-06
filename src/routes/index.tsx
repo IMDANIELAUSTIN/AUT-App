@@ -1697,7 +1697,7 @@ const isLikelyMobile = () => {
 function SupportButton() {
   const [copied, setCopied] = useState<string | null>(null);
   const paymentMethods: SupportPaymentMethod[] = [
-    { label: "PayPal", initials: "PP", hint: "open", href: "https://paypal.me/imdanielaustin", mobileHref: "https://paypal.me/imdanielaustin", accent: "linear-gradient(145deg, #003087, #009cde)" },
+    { label: "PayPal", initials: "PP", hint: "open", href: "https://www.paypal.me/dlajr", mobileHref: "https://www.paypal.me/dlajr", accent: "linear-gradient(145deg, #003087, #009cde)" },
     { label: "Venmo", initials: "V", hint: "open", href: "https://venmo.com/u/imdanielaustin", mobileHref: "venmo://paycharge?txn=pay&recipients=imdanielaustin", accent: "linear-gradient(145deg, #008cff, #006aff)" },
     { label: "Cash App", initials: "$", hint: "open", href: "https://cash.app/$imdanielaustin", mobileHref: "https://cash.app/$imdanielaustin", accent: "linear-gradient(145deg, #00d632, #00a526)" },
     { label: "Coinbase", initials: "CB", hint: "open app", href: "https://www.coinbase.com/", mobileHref: "coinbase://", accent: "linear-gradient(145deg, #1652f0, #0a46e4)" },
