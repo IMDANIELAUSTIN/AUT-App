@@ -716,9 +716,9 @@ function ExpenseBreakdown({ items, fiat, total, onChange }: {
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex flex-col gap-1 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-      <dt className="text-sm font-medium text-muted-foreground">{label}</dt>
-      <dd className="min-w-0 break-words text-right text-base font-semibold tabular-nums sm:text-lg">{value}</dd>
+    <div className="ae-result-row">
+      <dt className="ae-result-label">{label}</dt>
+      <dd className="ae-result-value">{value}</dd>
     </div>
   );
 }
@@ -731,8 +731,8 @@ function SurplusRow({ surplus, fiat, hourlyWage, asHours, onToggle }: {
   const hours = hourlyWage > 0 ? abs / hourlyWage : 0;
   const display = asHours ? `${sign}${hours.toFixed(1)} hrs` : `${sign}${fmtFiat(abs, fiat)}`;
   return (
-    <div className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-      <dt className="flex flex-wrap items-center gap-2 text-sm font-medium text-muted-foreground">
+    <div className="ae-result-row ae-result-row--surplus">
+      <dt className="ae-result-label ae-result-label--with-control">
         Surplus / deficit
         <Button
           variant="outline"
@@ -745,7 +745,7 @@ function SurplusRow({ surplus, fiat, hourlyWage, asHours, onToggle }: {
           {asHours ? "hrs" : fiat === "NONE" ? "num" : fiat}
         </Button>
       </dt>
-      <dd className="min-w-0 break-words text-right text-base font-semibold tabular-nums sm:text-lg">{display}</dd>
+      <dd className="ae-result-value">{display}</dd>
     </div>
   );
 }
@@ -1848,15 +1848,21 @@ async function buildPDF(d: ExportData): Promise<JsPDFDocument> {
   const W = doc.internal.pageSize.getWidth();
   const H = doc.internal.pageSize.getHeight();
   const M = 64;
+  const borderX = M - 18;
+  const borderY = M - 18;
+  const borderW = W - M * 2 + 36;
+  const borderH = H - M * 2 + 36;
+  const cardH = 116;
   let y = 76;
   const sign = d.surplus >= 0 ? "+" : "-";
   const statusLabel = d.status === "sustainable" ? "SUSTAINABLE" : d.status === "thin" ? "THIN MARGIN" : "DEFICIT";
+  const requiredHourly = `${fmtFiat(d.hourlyRequired, d.fiat)} / hr`;
 
   doc.setFillColor(250, 250, 249);
   doc.rect(0, 0, W, H, "F");
   doc.setDrawColor(218, 218, 216);
   doc.setLineWidth(1);
-  doc.roundedRect(M - 18, M - 18, W - M * 2 + 36, H - M * 2 + 36, 10, 10, "S");
+  doc.roundedRect(borderX, borderY, borderW, borderH, 10, 10, "S");
 
   doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.setTextColor(110);
   doc.text("THE AUSTIN EQUATION", M, y);
@@ -1869,18 +1875,22 @@ async function buildPDF(d: ExportData): Promise<JsPDFDocument> {
   y += 44;
 
   doc.setFillColor(255, 255, 255);
-  doc.roundedRect(M, y, W - M * 2, 92, 8, 8, "F");
+  doc.roundedRect(M, y, W - M * 2, cardH, 8, 8, "F");
   doc.setDrawColor(224, 224, 222);
-  doc.roundedRect(M, y, W - M * 2, 92, 8, 8, "S");
+  doc.roundedRect(M, y, W - M * 2, cardH, 8, 8, "S");
   doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.setTextColor(112);
   doc.text("CURRENT RESULT", M + 18, y + 24);
   doc.setFont("helvetica", "normal"); doc.setFontSize(24); doc.setTextColor(24);
   doc.text(statusLabel, M + 18, y + 56);
+  doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(112);
+  doc.text("Hourly wage required", M + 18, y + 84);
+  doc.setFont("helvetica", "bold"); doc.setFontSize(15); doc.setTextColor(24);
+  doc.text(requiredHourly, M + 18, y + 102);
   doc.setFont("helvetica", "bold"); doc.setFontSize(18);
   doc.text(`${sign}${fmtFiat(Math.abs(d.surplus), d.fiat)}`, W - M - 18, y + 54, { align: "right" });
   doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(112);
   doc.text("per month", W - M - 18, y + 70, { align: "right" });
-  y += 126;
+  y += cardH + 34;
 
   const row = (label: string, value: string) => {
     doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(96);
@@ -1895,9 +1905,10 @@ async function buildPDF(d: ExportData): Promise<JsPDFDocument> {
 
   exportResultRows(d).forEach(({ label, value }) => row(label, value));
 
+  const footerY = borderY + borderH - 18;
   doc.setFont("helvetica", "italic"); doc.setFontSize(9); doc.setTextColor(140);
-  doc.text(`"Money is the measure of effort exchanged for time."`, M, H - 42);
-  doc.text("M = E x T x C", W - M, H - 42, { align: "right" });
+  doc.text(`"Money is the measure of effort exchanged for time."`, M, footerY);
+  doc.text("M = E x T x C", W - M, footerY, { align: "right" });
 
   return doc;
 }
@@ -1916,7 +1927,11 @@ function downloadResultsImage(d: ExportData) {
   ctx.fillRect(0, 0, width, height);
   ctx.strokeStyle = "#dededb";
   ctx.lineWidth = 2;
-  roundRect(ctx, 78, 78, width - 156, height - 156, 20);
+  const borderX = 78;
+  const borderY = 78;
+  const borderW = width - 156;
+  const borderH = height - 156;
+  roundRect(ctx, borderX, borderY, borderW, borderH, 20);
   ctx.stroke();
 
   let y = 150;
@@ -1935,8 +1950,9 @@ function downloadResultsImage(d: ExportData) {
 
   const sign = d.surplus >= 0 ? "+" : "-";
   const statusLabel = d.status === "sustainable" ? "SUSTAINABLE" : d.status === "thin" ? "THIN MARGIN" : "DEFICIT";
+  const requiredHourly = `${fmtFiat(d.hourlyRequired, d.fiat)} / hr`;
   ctx.fillStyle = "#ffffff";
-  roundRect(ctx, 128, y, width - 256, 170, 18);
+  roundRect(ctx, 128, y, width - 256, 210, 18);
   ctx.fill();
   ctx.strokeStyle = "#e2e2df";
   ctx.stroke();
@@ -1946,6 +1962,12 @@ function downloadResultsImage(d: ExportData) {
   ctx.fillStyle = "#181818";
   ctx.font = "44px Helvetica Neue, Helvetica, Arial, sans-serif";
   ctx.fillText(statusLabel, 168, y + 108);
+  ctx.fillStyle = "#70706d";
+  ctx.font = "20px Helvetica Neue, Helvetica, Arial, sans-serif";
+  ctx.fillText("Hourly wage required", 168, y + 154);
+  ctx.fillStyle = "#181818";
+  ctx.font = "700 32px Helvetica Neue, Helvetica, Arial, sans-serif";
+  ctx.fillText(requiredHourly, 168, y + 190);
   ctx.font = "700 36px Helvetica Neue, Helvetica, Arial, sans-serif";
   ctx.textAlign = "right";
   ctx.fillText(`${sign}${fmtFiat(Math.abs(d.surplus), d.fiat)}`, width - 168, y + 104);
@@ -1953,7 +1975,7 @@ function downloadResultsImage(d: ExportData) {
   ctx.fillStyle = "#70706d";
   ctx.fillText("per month", width - 168, y + 136);
   ctx.textAlign = "left";
-  y += 240;
+  y += 280;
 
   exportResultRows(d).forEach(({ label, value }) => {
     ctx.fillStyle = "#666663";
@@ -1972,12 +1994,13 @@ function downloadResultsImage(d: ExportData) {
     y += 58;
   });
 
+  const footerY = borderY + borderH - 42;
   ctx.fillStyle = "#858581";
   ctx.font = "italic 22px Helvetica Neue, Helvetica, Arial, sans-serif";
-  ctx.fillText('"Money is the measure of effort exchanged for time."', 128, height - 128);
+  ctx.fillText('"Money is the measure of effort exchanged for time."', 128, footerY);
   ctx.font = "20px Helvetica Neue, Helvetica, Arial, sans-serif";
   ctx.textAlign = "right";
-  ctx.fillText("M = E x T x C", width - 128, height - 128);
+  ctx.fillText("M = E x T x C", width - 128, footerY);
 
   const link = document.createElement("a");
   link.href = canvas.toDataURL("image/jpeg", 0.94);
@@ -2027,7 +2050,7 @@ function PdfPreviewButton({ data }: { data: ExportData }) {
       .then((doc) => {
         if (!active) return;
         blobUrl = (doc.output("bloburl") as unknown as string).toString();
-        setUrl(blobUrl);
+        setUrl(`${blobUrl}#toolbar=0&navpanes=0&scrollbar=0&view=Fit`);
       })
       .catch(() => {
         if (active) toast.error("PDF preview failed");
@@ -2089,14 +2112,14 @@ function PdfPreviewButton({ data }: { data: ExportData }) {
           <span>Preview PDF</span>
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-4xl w-[95vw] h-[88vh] flex flex-col p-4 sm:p-6">
+      <DialogContent className="max-w-5xl w-[95vw] h-[88vh] flex flex-col p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle>Results PDF Preview</DialogTitle>
           <DialogDescription>Preview, print, or download a clean summary of the Results section.</DialogDescription>
         </DialogHeader>
-        <div className="flex-1 min-h-0 border border-border bg-muted">
+        <div className="flex flex-1 min-h-0 items-center justify-center overflow-hidden rounded-md border border-border bg-muted/40 p-2 sm:p-3">
           {url ? (
-            <iframe src={url} title="PDF preview" className="w-full h-full" />
+            <iframe src={url} title="PDF preview" className="h-full w-full border-0 bg-white" />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-xs text-muted-foreground">
               {loading ? "Generating preview…" : "Preview unavailable"}
@@ -2104,7 +2127,7 @@ function PdfPreviewButton({ data }: { data: ExportData }) {
           )}
         </div>
         <DialogFooter className="gap-2 pt-2 sm:justify-end">
-          <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+          <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
           <Button variant="outline" onClick={print} disabled={loading}>
             <Printer className="h-4 w-4" /> Print PDF
           </Button>

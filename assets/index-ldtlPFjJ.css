@@ -22,3 +22,9 @@
 :root{--font-display:"Helvetica Neue",Helvetica,Arial,sans-serif!important;--font-sans:"Helvetica Neue",Helvetica,Arial,sans-serif!important;--font-mono:"Helvetica Neue",Helvetica,Arial,sans-serif!important;--default-font-family:"Helvetica Neue",Helvetica,Arial,sans-serif!important;--default-mono-font-family:"Helvetica Neue",Helvetica,Arial,sans-serif!important}
 html,body,button,input,select,textarea,.font-display,.font-mono{font-family:"Helvetica Neue",Helvetica,Arial,sans-serif!important}
 .font-display{letter-spacing:0!important}
+.ae-result-row{display:flex;flex-direction:column;gap:.25rem;padding:.75rem 0}
+.ae-result-row--surplus{gap:.5rem}
+.ae-result-label{min-width:0;color:var(--muted-foreground);font-size:.875rem;font-weight:500;line-height:1.25rem}
+.ae-result-label--with-control{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem}
+.ae-result-value{white-space:nowrap;text-align:right;font-size:1rem;font-weight:600;line-height:1.5rem;font-variant-numeric:tabular-nums}
+@media(min-width:40rem){.ae-result-row{display:grid;grid-template-columns:minmax(0,1fr) max-content;align-items:center;column-gap:1.25rem}.ae-result-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ae-result-label--with-control{overflow:visible;white-space:normal}.ae-result-value{justify-self:end;font-size:1.125rem;line-height:1.75rem}}
