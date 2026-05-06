@@ -17,3 +17,6 @@
 .ae-support-payment-hint{display:block;margin-top:.1rem;font-size:.62rem;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--muted-foreground)}
 @media(min-width:40rem){.ae-support-payment-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 .dark .ae-support-payment-card{box-shadow:inset 0 0 0 1px rgb(255 255 255 / .12),0 0 0 1px rgb(0 0 0 / .04)}
+:root{--font-display:"Helvetica Neue",Helvetica,Arial,sans-serif!important;--font-sans:"Helvetica Neue",Helvetica,Arial,sans-serif!important;--font-mono:"Helvetica Neue",Helvetica,Arial,sans-serif!important;--default-font-family:"Helvetica Neue",Helvetica,Arial,sans-serif!important;--default-mono-font-family:"Helvetica Neue",Helvetica,Arial,sans-serif!important}
+html,body,button,input,select,textarea,.font-display,.font-mono{font-family:"Helvetica Neue",Helvetica,Arial,sans-serif!important}
+.font-display{letter-spacing:0!important}

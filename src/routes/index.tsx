@@ -265,7 +265,7 @@ export default function Index() {
 
   const taxRate = taxEnabled ? Math.max(0, Math.min(100, tax.federal + tax.state + tax.fica + tax.other)) / 100 : 0;
 
-  const { gross, income, surplus, breakEvenHrs, ratio, status, hourlyWage, netHourlyWage, monthlyHours } = useMemo(() => {
+  const { gross, income, surplus, breakEvenHrs, ratio, status, hourlyWage, netHourlyWage, monthlyHours, hourlyRequired } = useMemo(() => {
     const hoursPerWeekEquiv =
       timeUnit === "day" ? hoursPerUnit * 5 :
       timeUnit === "week" ? hoursPerUnit :
@@ -280,7 +280,9 @@ export default function Index() {
     const breakEvenHrs = netHourlyWage > 0 ? expenses / (netHourlyWage * effort) : 0;
     const ratio = expenses > 0 ? income / expenses : 0;
     const status: Status = ratio >= 1.2 ? "sustainable" : ratio >= 1 ? "thin" : "deficit";
-    return { gross, income, surplus, breakEvenHrs, ratio, status, hourlyWage, netHourlyWage, monthlyHours };
+    const requiredNetHourly = monthlyHours > 0 && effort > 0 ? (expenses * 1.2) / (monthlyHours * effort) : 0;
+    const hourlyRequired = taxRate < 1 ? requiredNetHourly / (1 - taxRate) : 0;
+    return { gross, income, surplus, breakEvenHrs, ratio, status, hourlyWage, netHourlyWage, monthlyHours, hourlyRequired };
   }, [expenses, wageAmount, payFreq, hoursPerUnit, timeUnit, effort, taxRate]);
 
   // Crypto equivalents
@@ -335,6 +337,7 @@ export default function Index() {
             crypto={crypto}
             cryptoEquivalent={cryptoEquivalent}
             hourlyWage={netHourlyWage}
+            hourlyRequired={hourlyRequired}
             visualizationAsHours={visualizationAsHours}
             initialIndex={currentSlideRef.current}
             onChange={(index) => {
@@ -445,7 +448,8 @@ export default function Index() {
             onToggle={() => toggleSection("wageGap")}
           >
               <dl className="divide-y divide-border">
-                <Row label="Effective hourly wage" value={fmtFiat(hourlyWage, fiat)} />
+                <Row label="Hourly Wage Required" value={fmtFiat(hourlyRequired, fiat)} />
+                <Row label="Current Hourly Wage" value={fmtFiat(hourlyWage, fiat)} />
                 {taxEnabled && <Row label="After-tax hourly wage" value={fmtFiat(netHourlyWage, fiat)} />}
                 <Row label="Monthly hours worked" value={`${monthlyHours.toFixed(0)} hrs`} />
                 <Row label={taxEnabled ? "Gross monthly income" : "Gross monthly income"} value={fmtFiat(gross, fiat)} />
@@ -491,7 +495,7 @@ export default function Index() {
               data={{
                 fiat, crypto, expenses, wageAmount, payFreq, timeUnit,
                 hoursPerUnit, effort, hourlyWage, monthlyHours,
-                income, gross, surplus, breakEvenHrs, ratio, status, cryptoEquivalent,
+                income, gross, surplus, breakEvenHrs, ratio, status, cryptoEquivalent, hourlyRequired,
                 taxEnabled, taxRate,
               }}
             />
@@ -814,12 +818,13 @@ type VizProps = {
   status: Status; ratio: number; surplus: number;
   income: number; expenses: number; fiat: FiatCode;
   crypto: CryptoCode; cryptoEquivalent: number;
-  hourlyWage: number; visualizationAsHours: boolean;
+  hourlyWage: number; hourlyRequired: number; visualizationAsHours: boolean;
 };
 
 function VisualizationGallery(props: VizProps & { initialIndex: number; onChange: (i: number) => void }) {
   const { initialIndex, onChange, ...vizProps } = props;
   const slides = [
+    { name: "Hourly Wage Required", node: <HourlyRequiredViz {...vizProps} /> },
     { name: "Digital Timer", node: <DigitalTimerWatchViz {...vizProps} /> },
     { name: "Graphs", node: <GraphVizSlide {...vizProps} /> },
     { name: "Battery", node: <BatteryReserveViz {...vizProps} /> },
@@ -981,6 +986,30 @@ function StatusLabel({ status }: { status: Status }) {
     <div className="absolute bottom-3 right-4 flex items-center gap-2 text-[10px] uppercase tracking-[0.2em]">
       <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: STATUS_COLOR[status] }} />
       <span style={{ color: STATUS_COLOR[status] }}>{status}</span>
+    </div>
+  );
+}
+
+function HourlyRequiredViz({ status, hourlyRequired, fiat }: VizProps) {
+  const color = STATUS_COLOR[status];
+  const hourlyLabel = `${fmtFiat(hourlyRequired, fiat)}/hr`;
+  return (
+    <div className="absolute inset-0 flex items-center justify-center overflow-hidden px-6 py-12 bg-background">
+      <div className="mx-auto w-full max-w-[820px] text-center">
+        <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-muted-foreground">
+          Hourly Wage Required
+        </p>
+        <p
+          className="mt-6 break-words font-semibold leading-none tracking-normal tabular-nums"
+          style={{ color, fontSize: "clamp(4.25rem, 17vw, 10.5rem)" }}
+        >
+          {hourlyLabel}
+        </p>
+        <p className="mx-auto mt-5 max-w-[34rem] text-sm font-medium uppercase tracking-[0.16em] text-muted-foreground md:text-base">
+          To be sustainable after estimated taxes
+        </p>
+      </div>
+      <StatusLabel status={status} />
     </div>
   );
 }
@@ -1771,7 +1800,7 @@ type ExportData = {
   fiat: FiatCode; crypto: CryptoCode;
   expenses: number; wageAmount: number; payFreq: PayFreq; timeUnit: TimeUnit;
   hoursPerUnit: number; effort: number;
-  hourlyWage: number; monthlyHours: number;
+  hourlyWage: number; hourlyRequired: number; monthlyHours: number;
   income: number; gross: number; surplus: number; breakEvenHrs: number; ratio: number;
   status: Status; cryptoEquivalent: number;
   taxEnabled: boolean; taxRate: number;
@@ -1780,7 +1809,8 @@ type ExportData = {
 function exportResultRows(d: ExportData) {
   const sign = d.surplus >= 0 ? "+" : "-";
   const rows = [
-    { label: "Effective hourly wage", value: fmtFiat(d.hourlyWage, d.fiat) },
+    { label: "Hourly Wage Required", value: fmtFiat(d.hourlyRequired, d.fiat) },
+    { label: "Current Hourly Wage", value: fmtFiat(d.hourlyWage, d.fiat) },
     { label: "Monthly hours worked", value: `${d.monthlyHours.toFixed(0)} hrs` },
     { label: "Gross monthly income", value: fmtFiat(d.gross, d.fiat) },
   ];
@@ -1827,7 +1857,7 @@ async function buildPDF(d: ExportData): Promise<JsPDFDocument> {
   doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.setTextColor(110);
   doc.text("THE AUSTIN EQUATION", M, y);
   y += 30;
-  doc.setFont("times", "normal"); doc.setFontSize(30); doc.setTextColor(24);
+  doc.setFont("helvetica", "normal"); doc.setFontSize(30); doc.setTextColor(24);
   doc.text("Results Summary", M, y);
   y += 22;
   doc.setFont("helvetica", "normal"); doc.setFontSize(11); doc.setTextColor(92);
@@ -1840,7 +1870,7 @@ async function buildPDF(d: ExportData): Promise<JsPDFDocument> {
   doc.roundedRect(M, y, W - M * 2, 92, 8, 8, "S");
   doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.setTextColor(112);
   doc.text("CURRENT RESULT", M + 18, y + 24);
-  doc.setFont("times", "normal"); doc.setFontSize(24); doc.setTextColor(24);
+  doc.setFont("helvetica", "normal"); doc.setFontSize(24); doc.setTextColor(24);
   doc.text(statusLabel, M + 18, y + 56);
   doc.setFont("helvetica", "bold"); doc.setFontSize(18);
   doc.text(`${sign}${fmtFiat(Math.abs(d.surplus), d.fiat)}`, W - M - 18, y + 54, { align: "right" });
@@ -1861,7 +1891,7 @@ async function buildPDF(d: ExportData): Promise<JsPDFDocument> {
 
   exportResultRows(d).forEach(({ label, value }) => row(label, value));
 
-  doc.setFont("times", "italic"); doc.setFontSize(9); doc.setTextColor(140);
+  doc.setFont("helvetica", "italic"); doc.setFontSize(9); doc.setTextColor(140);
   doc.text(`"Money is the measure of effort exchanged for time."`, M, H - 42);
   doc.text("M = E x T x C", W - M, H - 42, { align: "right" });
 
@@ -1887,15 +1917,15 @@ function downloadResultsImage(d: ExportData) {
 
   let y = 150;
   ctx.fillStyle = "#6f6f6c";
-  ctx.font = "700 18px Arial, sans-serif";
+  ctx.font = "700 18px Helvetica Neue, Helvetica, Arial, sans-serif";
   ctx.fillText("THE AUSTIN EQUATION", 128, y);
   y += 72;
   ctx.fillStyle = "#181818";
-  ctx.font = "52px Georgia, serif";
+  ctx.font = "52px Helvetica Neue, Helvetica, Arial, sans-serif";
   ctx.fillText("Results Summary", 128, y);
   y += 42;
   ctx.fillStyle = "#5f5f5c";
-  ctx.font = "24px Arial, sans-serif";
+  ctx.font = "24px Helvetica Neue, Helvetica, Arial, sans-serif";
   wrapCanvasText(ctx, exportSubtitle(d), 128, y, width - 256, 34);
   y += 112;
 
@@ -1907,15 +1937,15 @@ function downloadResultsImage(d: ExportData) {
   ctx.strokeStyle = "#e2e2df";
   ctx.stroke();
   ctx.fillStyle = "#70706d";
-  ctx.font = "700 18px Arial, sans-serif";
+  ctx.font = "700 18px Helvetica Neue, Helvetica, Arial, sans-serif";
   ctx.fillText("CURRENT RESULT", 168, y + 48);
   ctx.fillStyle = "#181818";
-  ctx.font = "44px Georgia, serif";
+  ctx.font = "44px Helvetica Neue, Helvetica, Arial, sans-serif";
   ctx.fillText(statusLabel, 168, y + 108);
-  ctx.font = "700 36px Arial, sans-serif";
+  ctx.font = "700 36px Helvetica Neue, Helvetica, Arial, sans-serif";
   ctx.textAlign = "right";
   ctx.fillText(`${sign}${fmtFiat(Math.abs(d.surplus), d.fiat)}`, width - 168, y + 104);
-  ctx.font = "20px Arial, sans-serif";
+  ctx.font = "20px Helvetica Neue, Helvetica, Arial, sans-serif";
   ctx.fillStyle = "#70706d";
   ctx.fillText("per month", width - 168, y + 136);
   ctx.textAlign = "left";
@@ -1923,10 +1953,10 @@ function downloadResultsImage(d: ExportData) {
 
   exportResultRows(d).forEach(({ label, value }) => {
     ctx.fillStyle = "#666663";
-    ctx.font = "24px Arial, sans-serif";
+    ctx.font = "24px Helvetica Neue, Helvetica, Arial, sans-serif";
     ctx.fillText(label, 128, y);
     ctx.fillStyle = "#191919";
-    ctx.font = "700 25px Arial, sans-serif";
+    ctx.font = "700 25px Helvetica Neue, Helvetica, Arial, sans-serif";
     ctx.textAlign = "right";
     ctx.fillText(value, width - 128, y);
     ctx.textAlign = "left";
@@ -1939,9 +1969,9 @@ function downloadResultsImage(d: ExportData) {
   });
 
   ctx.fillStyle = "#858581";
-  ctx.font = "italic 22px Georgia, serif";
+  ctx.font = "italic 22px Helvetica Neue, Helvetica, Arial, sans-serif";
   ctx.fillText('"Money is the measure of effort exchanged for time."', 128, height - 128);
-  ctx.font = "20px Arial, sans-serif";
+  ctx.font = "20px Helvetica Neue, Helvetica, Arial, sans-serif";
   ctx.textAlign = "right";
   ctx.fillText("M = E x T x C", width - 128, height - 128);
 
