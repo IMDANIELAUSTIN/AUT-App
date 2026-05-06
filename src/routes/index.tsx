@@ -1697,8 +1697,6 @@ const isLikelyMobile = () => {
 function SupportButton() {
   const [copied, setCopied] = useState<string | null>(null);
   const paymentMethods: SupportPaymentMethod[] = [
-    { label: "Apple Pay", initials: "AP", hint: "learn more", href: "https://www.apple.com/apple-cash/", accent: "linear-gradient(145deg, #111827, #374151)" },
-    { label: "Google Pay", initials: "G", hint: "open pay", href: "https://pay.google.com/", mobileHref: "https://pay.google.com/", accent: "linear-gradient(145deg, #2563eb, #16a34a)" },
     { label: "PayPal", initials: "PP", hint: "open", href: "https://paypal.me/imdanielaustin", mobileHref: "https://paypal.me/imdanielaustin", accent: "linear-gradient(145deg, #003087, #009cde)" },
     { label: "Venmo", initials: "V", hint: "open", href: "https://venmo.com/u/imdanielaustin", mobileHref: "venmo://paycharge?txn=pay&recipients=imdanielaustin", accent: "linear-gradient(145deg, #008cff, #006aff)" },
     { label: "Cash App", initials: "$", hint: "open", href: "https://cash.app/$imdanielaustin", mobileHref: "https://cash.app/$imdanielaustin", accent: "linear-gradient(145deg, #00d632, #00a526)" },
@@ -1742,7 +1740,7 @@ function SupportButton() {
       </DialogTrigger>
       <DialogContent className="ae-support-dialog sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Support development</DialogTitle>
+          <DialogTitle>Support Development</DialogTitle>
           <DialogDescription className="max-w-prose text-sm leading-relaxed">
             Choose a payment app, or copy a crypto address. On mobile, supported buttons open the matching app when your device allows it.
           </DialogDescription>
