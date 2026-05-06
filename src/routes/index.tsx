@@ -1699,7 +1699,7 @@ function SupportButton() {
   const paymentMethods: SupportPaymentMethod[] = [
     { label: "Apple Pay", initials: "AP", hint: "learn more", href: "https://www.apple.com/apple-cash/", accent: "linear-gradient(145deg, #111827, #374151)" },
     { label: "Google Pay", initials: "G", hint: "open pay", href: "https://pay.google.com/", mobileHref: "https://pay.google.com/", accent: "linear-gradient(145deg, #2563eb, #16a34a)" },
-    { label: "PayPal", initials: "PP", hint: "open", href: "https://www.paypal.com/paypalme/imdanielaustin", mobileHref: "https://www.paypal.com/paypalme/imdanielaustin", accent: "linear-gradient(145deg, #003087, #009cde)" },
+    { label: "PayPal", initials: "PP", hint: "open", href: "https://paypal.me/imdanielaustin", mobileHref: "https://paypal.me/imdanielaustin", accent: "linear-gradient(145deg, #003087, #009cde)" },
     { label: "Venmo", initials: "V", hint: "open", href: "https://venmo.com/u/imdanielaustin", mobileHref: "venmo://paycharge?txn=pay&recipients=imdanielaustin", accent: "linear-gradient(145deg, #008cff, #006aff)" },
     { label: "Cash App", initials: "$", hint: "open", href: "https://cash.app/$imdanielaustin", mobileHref: "https://cash.app/$imdanielaustin", accent: "linear-gradient(145deg, #00d632, #00a526)" },
     { label: "Coinbase", initials: "CB", hint: "open app", href: "https://www.coinbase.com/", mobileHref: "coinbase://", accent: "linear-gradient(145deg, #1652f0, #0a46e4)" },
