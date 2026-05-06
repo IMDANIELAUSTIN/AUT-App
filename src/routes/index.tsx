@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Carousel,
   CarouselApi,
@@ -256,7 +256,9 @@ export default function Index() {
           surplusAsHours, graphsAsHours: visualizationAsHours, visualizationAsHours, collapsedSections,
         }),
       );
-    } catch {}
+    } catch {
+      // Ignore storage failures in private browsing or locked-down browsers.
+    }
   }, [fiat, crypto, expenses, expenseItems, wageAmount, payFreq, timeUnit, hoursPerUnit, effort, taxEnabled, tax, currentSlide, surplusAsHours, visualizationAsHours, collapsedSections]);
 
   const taxRate = taxEnabled ? Math.max(0, Math.min(100, tax.federal + tax.state + tax.fica + tax.other)) / 100 : 0;
@@ -473,7 +475,11 @@ export default function Index() {
               hoursPerUnit, effort, taxEnabled, tax, slide: currentSlide, surplusAsHours, graphsAsHours: visualizationAsHours, visualizationAsHours, collapsedSections,
             }} />
             <ResetButton onReset={() => {
-              try { localStorage.removeItem(STORAGE_KEY); } catch {}
+              try {
+                localStorage.removeItem(STORAGE_KEY);
+              } catch {
+                // Reset still works through reload when storage access is blocked.
+              }
               window.location.reload();
             }} />
             <PdfPreviewButton
@@ -827,12 +833,16 @@ function VisualizationGallery(props: VizProps & { initialIndex: number; onChange
       onChange(i);
     };
     api.on("select", handler);
-    return () => { api.off("select", handler); };
+    api.on("reInit", handler);
+    return () => {
+      api.off("select", handler);
+      api.off("reInit", handler);
+    };
   }, [api, initialSlideIndex, onChange]);
 
-  const goPrev = () => { api?.scrollPrev(); };
-  const goNext = () => { api?.scrollNext(); };
-  const goTo = (i: number) => { api?.scrollTo(i); };
+  const goPrev = useCallback(() => { api?.scrollPrev(); }, [api]);
+  const goNext = useCallback(() => { api?.scrollNext(); }, [api]);
+  const goTo = useCallback((i: number) => { api?.scrollTo(i); }, [api]);
 
   // Global keyboard arrow navigation
   useEffect(() => {
@@ -846,7 +856,7 @@ function VisualizationGallery(props: VizProps & { initialIndex: number; onChange
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [api]);
+  }, [goNext, goPrev, goTo, slides.length]);
 
   const activeName = slides[current]?.name ?? "";
   const announcement = `Slide ${current + 1} of ${slides.length}: ${activeName}. Status ${vizProps.status}.`;
@@ -882,13 +892,13 @@ function VisualizationGallery(props: VizProps & { initialIndex: number; onChange
       </div>
 
       <div className="flex items-center justify-between mt-4 gap-4">
-		        <button
-		          onClick={goPrev}
-              disabled={current === 0}
-		          aria-label="Previous slide"
-		          className="rounded-full px-4 py-2 text-[10px] uppercase tracking-[0.2em] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-35"
-		        >
-	          ← Prev
+        <button
+          onClick={goPrev}
+          disabled={current === 0}
+          aria-label="Previous slide"
+          className="rounded-full px-4 py-2 text-[10px] uppercase tracking-[0.2em] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-35"
+        >
+          ← Prev
         </button>
         <div className="flex items-center gap-1.5" role="tablist">
           {slides.map((s, i) => (
@@ -905,15 +915,15 @@ function VisualizationGallery(props: VizProps & { initialIndex: number; onChange
             />
           ))}
         </div>
-		        <button
-		          onClick={goNext}
-              disabled={current === slides.length - 1}
-		          aria-label="Next slide"
-		          className="rounded-full px-4 py-2 text-[10px] uppercase tracking-[0.2em] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-35"
-		        >
-	          Next →
-	        </button>
-	      </div>
+        <button
+          onClick={goNext}
+          disabled={current === slides.length - 1}
+          aria-label="Next slide"
+          className="rounded-full px-4 py-2 text-[10px] uppercase tracking-[0.2em] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-35"
+        >
+          Next →
+        </button>
+      </div>
     </div>
   );
 }
@@ -1528,7 +1538,9 @@ function SupportButton() {
       await navigator.clipboard.writeText(value);
       setCopied(label);
       setTimeout(() => setCopied(null), 1500);
-    } catch {}
+    } catch {
+      // Clipboard access can be denied by browser permissions.
+    }
   };
   return (
     <Dialog>
@@ -1793,7 +1805,11 @@ function PdfPreviewButton({ data }: { data: ExportData }) {
     setUrl(blobUrl.toString());
     return () => {
       // Revoke when closing
-      try { URL.revokeObjectURL(blobUrl.toString()); } catch {}
+      try {
+        URL.revokeObjectURL(blobUrl.toString());
+      } catch {
+        // The browser may already have released this object URL.
+      }
       setUrl(null);
     };
   }, [open, data]);
@@ -1812,7 +1828,13 @@ function PdfPreviewButton({ data }: { data: ExportData }) {
     const blobUrl = doc.output("bloburl") as unknown as string;
     const w = window.open(blobUrl.toString(), "_blank");
     if (w) {
-      w.addEventListener("load", () => { try { w.print(); } catch {} });
+      w.addEventListener("load", () => {
+        try {
+          w.print();
+        } catch {
+          // Some browsers block programmatic print calls in new windows.
+        }
+      });
     }
   };
 
