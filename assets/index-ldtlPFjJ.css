@@ -3,3 +3,8 @@
 /* Sharp edge treatment: replace gray 1px borders with light/shadow edges. */
 .sharp-edge,.border.border-border,.border.border-input{border-color:transparent!important;box-shadow:var(--tw-inset-shadow),var(--tw-inset-ring-shadow),var(--tw-ring-offset-shadow),var(--tw-ring-shadow),inset 0 0 0 1px rgb(255 255 255 / .9),0 0 0 1px rgb(0 0 0 / .04),var(--tw-shadow,0 0 #0000)!important}
 .dark .sharp-edge,.dark .border.border-border,.dark .border.border-input{box-shadow:var(--tw-inset-shadow),var(--tw-inset-ring-shadow),var(--tw-ring-offset-shadow),var(--tw-ring-shadow),inset 0 0 0 1px rgb(255 255 255 / .12),0 0 0 1px rgb(0 0 0 / .04),var(--tw-shadow,0 0 #0000)!important}
+.ae-viz-viewport{overflow:hidden;touch-action:pan-y;-webkit-user-select:none;user-select:none}
+.ae-viz-track{display:flex;overflow:visible!important;scroll-snap-type:none!important;scroll-behavior:auto!important;will-change:transform}
+.ae-viz-track::-webkit-scrollbar{display:none}
+.ae-viz-slide{min-width:100%;flex:0 0 100%}
+.shadow-none{--tw-shadow:0 0 #0000!important;box-shadow:var(--tw-inset-shadow),var(--tw-inset-ring-shadow),var(--tw-ring-offset-shadow),var(--tw-ring-shadow),inset 0 0 0 1px rgb(255 255 255 / .9),0 0 0 1px rgb(0 0 0 / .04)!important}

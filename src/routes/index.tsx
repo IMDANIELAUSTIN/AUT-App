@@ -1,12 +1,4 @@
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  Carousel,
-  CarouselApi,
-  CarouselContent,
-  CarouselItem,
-  CarouselNext,
-  CarouselPrevious,
-} from "@/components/openui/carousel";
+import { type PointerEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -23,7 +15,7 @@ import { Switch } from "@/components/openui/switch";
 import { Select as OpenUISelect, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/openui/select";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/openui/card";
 import { Separator } from "@/components/openui/separator";
-import jsPDF from "jspdf";
+import type { jsPDF as JsPDFDocument } from "jspdf";
 import { ChevronDown, Settings as SettingsIcon, Share2, Printer, Download, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 
@@ -158,6 +150,17 @@ function loadState<T>(key: string, fallback: T): T {
   }
 }
 
+function persistSlideIndex(index: number) {
+  if (typeof window === "undefined") return;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    const next = raw ? JSON.parse(raw) : {};
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...next, slide: index }));
+  } catch {
+    // Slide persistence is a convenience; navigation should never depend on it.
+  }
+}
+
 // Encode/decode share state
 function encodeShare(state: typeof DEFAULTS): string {
   try {
@@ -211,8 +214,7 @@ export default function Index() {
   const [effort, setEffort] = useState<number>(initial.effort);
   const [taxEnabled, setTaxEnabled] = useState<boolean>(initial.taxEnabled);
   const [tax, setTax] = useState<TaxConfig>(initial.tax);
-  const [initialSlide] = useState<number>(initial.slide);
-  const [currentSlide, setCurrentSlide] = useState<number>(initial.slide);
+  const currentSlideRef = useRef<number>(initial.slide);
   const [surplusAsHours, setSurplusAsHours] = useState<boolean>(initial.surplusAsHours);
   const [visualizationAsHours, setVisualizationAsHours] = useState<boolean>(initial.visualizationAsHours);
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>(initial.collapsedSections || {});
@@ -252,14 +254,14 @@ export default function Index() {
         STORAGE_KEY,
         JSON.stringify({
           fiat, crypto, expenses, expenseItems, wageAmount, payFreq, timeUnit,
-          hoursPerUnit, effort, taxEnabled, tax, slide: currentSlide,
+          hoursPerUnit, effort, taxEnabled, tax, slide: currentSlideRef.current,
           surplusAsHours, graphsAsHours: visualizationAsHours, visualizationAsHours, collapsedSections,
         }),
       );
     } catch {
       // Ignore storage failures in private browsing or locked-down browsers.
     }
-  }, [fiat, crypto, expenses, expenseItems, wageAmount, payFreq, timeUnit, hoursPerUnit, effort, taxEnabled, tax, currentSlide, surplusAsHours, visualizationAsHours, collapsedSections]);
+  }, [fiat, crypto, expenses, expenseItems, wageAmount, payFreq, timeUnit, hoursPerUnit, effort, taxEnabled, tax, surplusAsHours, visualizationAsHours, collapsedSections]);
 
   const taxRate = taxEnabled ? Math.max(0, Math.min(100, tax.federal + tax.state + tax.fica + tax.other)) / 100 : 0;
 
@@ -334,8 +336,11 @@ export default function Index() {
             cryptoEquivalent={cryptoEquivalent}
             hourlyWage={netHourlyWage}
             visualizationAsHours={visualizationAsHours}
-            initialIndex={initialSlide}
-            onChange={setCurrentSlide}
+            initialIndex={currentSlideRef.current}
+            onChange={(index) => {
+              currentSlideRef.current = index;
+              persistSlideIndex(index);
+            }}
           />
         </CollapsibleSection>
 
@@ -472,7 +477,7 @@ export default function Index() {
           <div className="flex items-center gap-2 flex-wrap">
             <ShareButton state={{
               fiat, crypto, expenses, expenseItems, wageAmount, payFreq, timeUnit,
-              hoursPerUnit, effort, taxEnabled, tax, slide: currentSlide, surplusAsHours, graphsAsHours: visualizationAsHours, visualizationAsHours, collapsedSections,
+              hoursPerUnit, effort, taxEnabled, tax, slide: currentSlideRef.current, surplusAsHours, graphsAsHours: visualizationAsHours, visualizationAsHours, collapsedSections,
             }} />
             <ResetButton onReset={() => {
               try {
@@ -637,8 +642,8 @@ function SelectField({ label, value, onChange, options }: {
   );
 }
 
-function CurrencyInputField({ label, value, fiat, onChange }: {
-  label: string; value: number; fiat: FiatCode; onChange: (value: number) => void;
+function CurrencyInputField({ label, value, fiat, onChange, flat = false }: {
+  label: string; value: number; fiat: FiatCode; onChange: (value: number) => void; flat?: boolean;
 }) {
   const [focused, setFocused] = useState(false);
   const [draft, setDraft] = useState(value ? String(value) : "");
@@ -652,7 +657,7 @@ function CurrencyInputField({ label, value, fiat, onChange }: {
   };
   const displayValue = focused ? draft : fmtFiat(value, fiat);
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-border bg-background/70 p-4 shadow-sm">
+    <div className={`flex flex-col gap-3 rounded-lg border border-border bg-background/70 p-4 ${flat ? "shadow-none" : "shadow-sm"}`}>
       <Label className="text-muted-foreground">{label}</Label>
       <Input
         type="text"
@@ -689,6 +694,7 @@ function ExpenseBreakdown({ items, fiat, total, onChange }: {
             label={field.label}
             fiat={fiat}
             value={items[field.key]}
+            flat
             onChange={(value) => onChange(field.key, value)}
           />
         ))}
@@ -816,33 +822,29 @@ function VisualizationGallery(props: VizProps & { initialIndex: number; onChange
   const slides = [
     { name: "Digital Timer", node: <DigitalTimerWatchViz {...vizProps} /> },
     { name: "Graphs", node: <GraphVizSlide {...vizProps} /> },
+    { name: "Battery", node: <BatteryReserveViz {...vizProps} /> },
     { name: "Grade", node: <GradeViz {...vizProps} /> },
     { name: "Crypto", node: <CryptoIncomeViz {...vizProps} /> },
   ];
-  const initialSlideIndex = Math.min(Math.max(initialIndex, 0), slides.length - 1);
-  const [api, setApi] = useState<CarouselApi>();
+  const slideCount = slides.length;
+  const initialSlideIndex = Math.min(Math.max(initialIndex, 0), slideCount - 1);
+  const viewportRef = useRef<HTMLDivElement | null>(null);
+  const dragRef = useRef({ active: false, pointerId: -1, startX: 0, deltaX: 0 });
   const [current, setCurrent] = useState(initialSlideIndex);
+  const [dragX, setDragX] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
 
   useEffect(() => {
-    if (!api) return;
-    if (initialSlideIndex > 0) api.scrollTo(initialSlideIndex, true);
-    setCurrent(api.selectedScrollSnap());
-    const handler = () => {
-      const i = api.selectedScrollSnap();
-      setCurrent(i);
-      onChange(i);
-    };
-    api.on("select", handler);
-    api.on("reInit", handler);
-    return () => {
-      api.off("select", handler);
-      api.off("reInit", handler);
-    };
-  }, [api, initialSlideIndex, onChange]);
+    setCurrent(initialSlideIndex);
+  }, [initialSlideIndex]);
 
-  const goPrev = useCallback(() => { api?.scrollPrev(); }, [api]);
-  const goNext = useCallback(() => { api?.scrollNext(); }, [api]);
-  const goTo = useCallback((i: number) => { api?.scrollTo(i); }, [api]);
+  const goTo = useCallback((i: number) => {
+    const next = Math.min(Math.max(i, 0), slideCount - 1);
+    setCurrent(next);
+    onChange(next);
+  }, [onChange, slideCount]);
+  const goPrev = useCallback(() => { goTo(current - 1); }, [current, goTo]);
+  const goNext = useCallback(() => { goTo(current + 1); }, [current, goTo]);
 
   // Global keyboard arrow navigation
   useEffect(() => {
@@ -852,26 +854,73 @@ function VisualizationGallery(props: VizProps & { initialIndex: number; onChange
       if (e.key === "ArrowLeft") { e.preventDefault(); goPrev(); }
       else if (e.key === "ArrowRight") { e.preventDefault(); goNext(); }
       else if (e.key === "Home") { e.preventDefault(); goTo(0); }
-      else if (e.key === "End") { e.preventDefault(); goTo(slides.length - 1); }
+      else if (e.key === "End") { e.preventDefault(); goTo(slideCount - 1); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [goNext, goPrev, goTo, slides.length]);
+  }, [goNext, goPrev, goTo, slideCount]);
+
+  const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    dragRef.current = { active: true, pointerId: event.pointerId, startX: event.clientX, deltaX: 0 };
+    setIsDragging(true);
+    setDragX(0);
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  };
+
+  const onPointerMove = (event: PointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    if (!drag.active || drag.pointerId !== event.pointerId) return;
+    const rawDelta = event.clientX - drag.startX;
+    const atEdge = (current === 0 && rawDelta > 0) || (current === slideCount - 1 && rawDelta < 0);
+    const delta = atEdge ? rawDelta * 0.28 : rawDelta;
+    drag.deltaX = delta;
+    setDragX(delta);
+  };
+
+  const finishDrag = (event: PointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    if (!drag.active || drag.pointerId !== event.pointerId) return;
+    const width = viewportRef.current?.clientWidth || 1;
+    const threshold = Math.min(120, Math.max(54, width * 0.18));
+    const delta = drag.deltaX;
+    dragRef.current = { active: false, pointerId: -1, startX: 0, deltaX: 0 };
+    setIsDragging(false);
+    setDragX(0);
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+    if (Math.abs(delta) > threshold) {
+      goTo(delta < 0 ? current + 1 : current - 1);
+    }
+  };
 
   const activeName = slides[current]?.name ?? "";
-  const announcement = `Slide ${current + 1} of ${slides.length}: ${activeName}. Status ${vizProps.status}.`;
+  const announcement = `Slide ${current + 1} of ${slideCount}: ${activeName}. Status ${vizProps.status}.`;
+  const trackTransform = `translate3d(calc(${-current * 100}% + ${dragX}px), 0, 0)`;
 
   return (
     <div className="relative" role="region" aria-roledescription="carousel" aria-label="Financial visualizations">
-      <Carousel setApi={setApi} opts={{ loop: false, align: "start", containScroll: "trimSnaps", duration: 24 }}>
-        <CarouselContent>
+      <div
+        ref={viewportRef}
+        className="ae-viz-viewport rounded-lg"
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={finishDrag}
+        onPointerCancel={finishDrag}
+      >
+        <div
+          className="ae-viz-track"
+          style={{
+            transform: trackTransform,
+            transition: isDragging ? "none" : "transform 420ms cubic-bezier(0.22, 1, 0.36, 1)",
+          }}
+        >
           {slides.map((s, i) => (
-            <CarouselItem key={i}>
+            <div key={i} className="ae-viz-slide">
               <div
                 tabIndex={i === current ? 0 : -1}
                 role="group"
                 aria-roledescription="slide"
-                aria-label={`${i + 1} of ${slides.length}: ${s.name} — ${vizProps.status}`}
+                aria-label={`${i + 1} of ${slideCount}: ${s.name} — ${vizProps.status}`}
                 className="relative h-[360px] md:h-[440px] border border-border bg-card overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-foreground"
               >
                 {s.node}
@@ -879,12 +928,10 @@ function VisualizationGallery(props: VizProps & { initialIndex: number; onChange
                   {s.name}
                 </div>
               </div>
-            </CarouselItem>
+            </div>
           ))}
-        </CarouselContent>
-        <CarouselPrevious className="hidden md:inline-flex md:-left-12" onClick={goPrev} />
-        <CarouselNext className="hidden md:inline-flex md:-right-12" onClick={goNext} />
-      </Carousel>
+        </div>
+      </div>
 
       {/* Live region for screen readers */}
       <div className="sr-only" aria-live="polite" aria-atomic="true">
@@ -917,7 +964,7 @@ function VisualizationGallery(props: VizProps & { initialIndex: number; onChange
         </div>
         <button
           onClick={goNext}
-          disabled={current === slides.length - 1}
+          disabled={current === slideCount - 1}
           aria-label="Next slide"
           className="rounded-full px-4 py-2 text-[10px] uppercase tracking-[0.2em] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-35"
         >
@@ -1078,6 +1125,84 @@ function GraphVizSlide({ income, expenses, fiat, status, visualizationAsHours, h
           hourlyWage={hourlyWage}
         />
       </div>
+    </div>
+  );
+}
+
+function BatteryReserveViz({ status, surplus, fiat, hourlyWage, visualizationAsHours }: VizProps) {
+  const netHours = hourlyWage > 0 ? surplus / hourlyWage : 0;
+  const absHours = Math.abs(netHours);
+  const days = absHours / 24;
+  const capacityDays = 7;
+  const fillPercent = Math.min(100, (days / capacityDays) * 100);
+  const isSurplus = surplus >= 0;
+  const color = isSurplus ? "oklch(0.68 0.18 145)" : "oklch(0.62 0.22 28)";
+  const glow = isSurplus ? "oklch(0.72 0.18 145 / 0.38)" : "oklch(0.64 0.22 28 / 0.38)";
+  const displayValue = visualizationAsHours
+    ? `${isSurplus ? "+" : "−"}${absHours.toFixed(1)} hrs`
+    : `${isSurplus ? "+" : "−"}${fmtFiat(Math.abs(surplus), fiat)}`;
+  const wholeDays = Math.floor(days);
+  const remainingHours = Math.round(absHours % 24);
+  const cells = Array.from({ length: capacityDays }, (_, i) => i);
+
+  return (
+    <div className="absolute inset-0 flex items-center justify-center overflow-hidden bg-[oklch(0.98_0_0)] px-4 py-10">
+      <div className="w-full max-w-[820px]">
+        <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
+              24-hour reserve
+            </p>
+            <p className="mt-2 font-mono text-[clamp(2rem,8vw,4.8rem)] font-bold leading-none tabular-nums" style={{ color }}>
+              {displayValue}
+            </p>
+          </div>
+          <p className="font-mono text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground sm:text-right">
+            {wholeDays}d {remainingHours}h {isSurplus ? "stored" : "short"}
+          </p>
+        </div>
+
+        <div className="relative mx-auto flex w-full max-w-[720px] items-center gap-2 sm:gap-3">
+          <div
+            className="relative h-32 flex-1 overflow-hidden rounded-[1.65rem] bg-[linear-gradient(145deg,oklch(0.99_0_0),oklch(0.88_0.006_250))] p-3 sm:h-40 sm:p-4"
+            style={{
+              boxShadow: "inset 0 2px 5px rgb(255 255 255 / .95), inset 0 -12px 24px rgb(0 0 0 / .08), 0 18px 36px rgb(0 0 0 / .12)",
+            }}
+          >
+            <div className="absolute inset-x-8 top-3 h-4 rounded-full bg-white/65 blur-[1px]" />
+            <div className="relative h-full overflow-hidden rounded-[1.2rem] bg-[linear-gradient(180deg,oklch(0.92_0.01_140),oklch(0.80_0.012_140))] shadow-inner">
+              <div
+                className="absolute inset-y-0 transition-[width] duration-500 ease-out"
+                style={{
+                  [isSurplus ? "left" : "right"]: 0,
+                  width: `${fillPercent}%`,
+                  background: isSurplus
+                    ? "linear-gradient(90deg, oklch(0.58 0.16 145), oklch(0.78 0.19 145))"
+                    : "linear-gradient(270deg, oklch(0.56 0.2 28), oklch(0.72 0.22 28))",
+                  boxShadow: `0 0 32px ${glow}`,
+                }}
+              />
+              <div className="absolute inset-0 grid" style={{ gridTemplateColumns: `repeat(${capacityDays}, minmax(0, 1fr))` }}>
+                {cells.map((cell) => (
+                  <div key={cell} className="border-r border-white/55 last:border-r-0" />
+                ))}
+              </div>
+              <div className="absolute inset-0 bg-[linear-gradient(180deg,rgb(255_255_255_/_0.38),transparent_38%,rgb(0_0_0_/_0.08))]" />
+            </div>
+          </div>
+          <div
+            className="h-16 w-5 rounded-r-xl bg-[linear-gradient(145deg,oklch(0.96_0_0),oklch(0.78_0.006_250))] sm:h-20 sm:w-7"
+            style={{ boxShadow: "inset 0 2px 4px rgb(255 255 255 / .85), inset -4px -6px 10px rgb(0 0 0 / .1)" }}
+          />
+        </div>
+
+        <div className="mt-5 grid grid-cols-7 gap-1.5 font-mono text-[9px] font-semibold uppercase tracking-[0.12em] text-muted-foreground sm:gap-2 sm:text-[10px]">
+          {cells.map((cell) => (
+            <div key={cell} className="text-center">{cell + 1}d</div>
+          ))}
+        </div>
+      </div>
+      <StatusLabel status={status} />
     </div>
   );
 }
@@ -1625,7 +1750,8 @@ function exportSubtitle(d: ExportData) {
   return `${statusLabel} result with a ${fmtFiat(Math.abs(d.surplus), d.fiat)} monthly ${sign}. Generated ${new Date().toLocaleDateString()}.`;
 }
 
-function buildPDF(d: ExportData): jsPDF {
+async function buildPDF(d: ExportData): Promise<JsPDFDocument> {
+  const { jsPDF } = await import("jspdf");
   const doc = new jsPDF({ unit: "pt", format: "letter" });
   const W = doc.internal.pageSize.getWidth();
   const H = doc.internal.pageSize.getHeight();
@@ -1797,37 +1923,60 @@ function wrapCanvasText(ctx: CanvasRenderingContext2D, text: string, x: number, 
 function PdfPreviewButton({ data }: { data: ExportData }) {
   const [open, setOpen] = useState(false);
   const [url, setUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!open) return;
-    const doc = buildPDF(data);
-    const blobUrl = doc.output("bloburl") as unknown as string;
-    setUrl(blobUrl.toString());
+    let active = true;
+    let blobUrl: string | null = null;
+    setLoading(true);
+    setUrl(null);
+    buildPDF(data)
+      .then((doc) => {
+        if (!active) return;
+        blobUrl = (doc.output("bloburl") as unknown as string).toString();
+        setUrl(blobUrl);
+      })
+      .catch(() => {
+        if (active) toast.error("PDF preview failed");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
     return () => {
-      // Revoke when closing
-      try {
-        URL.revokeObjectURL(blobUrl.toString());
-      } catch {
-        // The browser may already have released this object URL.
+      active = false;
+      if (blobUrl) {
+        try {
+          URL.revokeObjectURL(blobUrl);
+        } catch {
+          // The browser may already have released this object URL.
+        }
       }
       setUrl(null);
     };
   }, [open, data]);
 
-  const download = () => {
-    const doc = buildPDF(data);
-    doc.save(`austin-equation-${new Date().toISOString().slice(0, 10)}.pdf`);
-    toast.success("PDF downloaded");
+  const download = async () => {
+    try {
+      const doc = await buildPDF(data);
+      doc.save(`austin-equation-${new Date().toISOString().slice(0, 10)}.pdf`);
+      toast.success("PDF downloaded");
+    } catch {
+      toast.error("PDF download failed");
+    }
   };
   const downloadImage = () => downloadResultsImage(data);
 
-  const print = () => {
-    const doc = buildPDF(data);
-    // Save then open print dialog
-    doc.save(`austin-equation-${new Date().toISOString().slice(0, 10)}.pdf`);
-    const blobUrl = doc.output("bloburl") as unknown as string;
-    const w = window.open(blobUrl.toString(), "_blank");
-    if (w) {
+  const print = async () => {
+    try {
+      const doc = await buildPDF(data);
+      const blobUrl = (doc.output("bloburl") as unknown as string).toString();
+      const w = window.open(blobUrl, "_blank");
+      if (!w) {
+        URL.revokeObjectURL(blobUrl);
+        toast.error("Print window blocked");
+        return;
+      }
       w.addEventListener("load", () => {
         try {
           w.print();
@@ -1835,6 +1984,9 @@ function PdfPreviewButton({ data }: { data: ExportData }) {
           // Some browsers block programmatic print calls in new windows.
         }
       });
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+    } catch {
+      toast.error("PDF print failed");
     }
   };
 
@@ -1855,16 +2007,16 @@ function PdfPreviewButton({ data }: { data: ExportData }) {
             <iframe src={url} title="PDF preview" className="w-full h-full" />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-xs text-muted-foreground">
-              Generating preview…
+              {loading ? "Generating preview…" : "Preview unavailable"}
             </div>
           )}
         </div>
         <DialogFooter className="gap-2 pt-2 sm:justify-end">
           <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-          <Button variant="outline" onClick={print}>
+          <Button variant="outline" onClick={print} disabled={loading}>
             <Printer className="h-4 w-4" /> Print PDF
           </Button>
-          <Button onClick={download}>
+          <Button onClick={download} disabled={loading}>
             <Download className="h-4 w-4" /> Download PDF
           </Button>
           <Button onClick={downloadImage}>
