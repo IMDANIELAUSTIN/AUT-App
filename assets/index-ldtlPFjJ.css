@@ -8,23 +8,3 @@
 .ae-viz-track::-webkit-scrollbar{display:none}
 .ae-viz-slide{min-width:100%;flex:0 0 100%}
 .shadow-none{--tw-shadow:0 0 #0000!important;box-shadow:var(--tw-inset-shadow),var(--tw-inset-ring-shadow),var(--tw-ring-offset-shadow),var(--tw-ring-shadow),inset 0 0 0 1px rgb(255 255 255 / .9),0 0 0 1px rgb(0 0 0 / .04)!important}
-.ae-support-dialog{width:calc(100vw - 2rem)!important;max-width:calc(100vw - 2rem)!important;max-height:calc(100svh - 2rem)!important;overflow:hidden!important;padding:1.25rem!important}
-.ae-support-payment-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:.75rem}
-.ae-support-payment-card{display:flex;min-width:0;min-height:3.8rem;align-items:center;gap:.75rem;border-radius:.75rem;padding:.85rem;text-align:left;transition:background-color .18s ease,opacity .18s ease,transform .18s ease;box-shadow:inset 0 0 0 1px rgb(255 255 255 / .9),0 0 0 1px rgb(0 0 0 / .04)}
-.ae-support-payment-card:not(:disabled):hover{background:var(--muted);transform:translateY(-1px)}
-.ae-support-payment-card:disabled{cursor:not-allowed;opacity:.55}
-.ae-support-payment-icon{display:inline-flex;height:2.25rem;width:2.25rem;flex-shrink:0;align-items:center;justify-content:center;border-radius:999px;color:#fff;font-size:.7rem;font-weight:700;letter-spacing:.08em;box-shadow:inset 0 1px 0 rgb(255 255 255 / .35),0 8px 18px rgb(0 0 0 / .12)}
-.ae-support-payment-label{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.78rem;font-weight:700;line-height:1.2;color:var(--foreground)}
-.ae-support-payment-hint{display:block;margin-top:.1rem;font-size:.62rem;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--muted-foreground)}
-@media(min-width:30rem){.ae-support-payment-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(min-width:40rem){.ae-support-dialog{max-width:28rem!important;padding:1.5rem!important}.ae-support-payment-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
-.dark .ae-support-payment-card{box-shadow:inset 0 0 0 1px rgb(255 255 255 / .12),0 0 0 1px rgb(0 0 0 / .04)}
-:root{--font-display:"Helvetica Neue",Helvetica,Arial,sans-serif!important;--font-sans:"Helvetica Neue",Helvetica,Arial,sans-serif!important;--font-mono:"Helvetica Neue",Helvetica,Arial,sans-serif!important;--default-font-family:"Helvetica Neue",Helvetica,Arial,sans-serif!important;--default-mono-font-family:"Helvetica Neue",Helvetica,Arial,sans-serif!important}
-html,body,button,input,select,textarea,.font-display,.font-mono{font-family:"Helvetica Neue",Helvetica,Arial,sans-serif!important}
-.font-display{letter-spacing:0!important}
-.ae-result-row{display:flex;flex-direction:column;gap:.25rem;padding:.75rem 0}
-.ae-result-row--surplus{gap:.5rem}
-.ae-result-label{min-width:0;color:var(--muted-foreground);font-size:.875rem;font-weight:500;line-height:1.25rem}
-.ae-result-label--with-control{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem}
-.ae-result-value{white-space:nowrap;text-align:right;font-size:1rem;font-weight:600;line-height:1.5rem;font-variant-numeric:tabular-nums}
-@media(min-width:40rem){.ae-result-row{display:grid;grid-template-columns:minmax(0,1fr) max-content;align-items:center;column-gap:1.25rem}.ae-result-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ae-result-label--with-control{overflow:visible;white-space:normal}.ae-result-value{justify-self:end;font-size:1.125rem;line-height:1.75rem}}
