@@ -1,5 +1,12 @@
 import { plaid, corsHeaders } from "../_shared/plaid.ts";
 
+function getCountryCodes() {
+  return (Deno.env.get("PLAID_COUNTRY_CODES") || "US")
+    .split(",")
+    .map((code) => code.trim().toUpperCase())
+    .filter(Boolean);
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   try {
@@ -11,7 +18,7 @@ Deno.serve(async (req) => {
       user: { client_user_id: user_key },
       client_name: "FYI — Find Your Income",
       products: ["transactions"],
-      country_codes: ["US"],
+      country_codes: getCountryCodes(),
       language: "en",
     });
     return new Response(JSON.stringify(data), { headers: { ...corsHeaders, "Content-Type": "application/json" } });

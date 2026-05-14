@@ -1,5 +1,5 @@
 // Shared Plaid helpers
-const PLAID_ENV = "sandbox";
+const PLAID_ENV = Deno.env.get("PLAID_ENV") || "sandbox";
 const PLAID_BASE = `https://${PLAID_ENV}.plaid.com`;
 
 export async function plaid<T = unknown>(path: string, body: Record<string, unknown>): Promise<T> {
